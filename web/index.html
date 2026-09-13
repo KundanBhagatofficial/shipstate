@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SHIPSTATE</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">S</div>
+        <div><strong>SHIPSTATE</strong><span>Execution control plane</span></div>
+      </div>
+      <nav id="nav">
+        <button data-view="now" class="active"><span>◆</span> Now</button>
+        <button data-view="tasks"><span>▦</span> Tasks</button>
+        <button data-view="runs"><span>↯</span> Runs</button>
+        <button data-view="evidence"><span>✓</span> Evidence</button>
+        <button data-view="system"><span>⌘</span> System</button>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="git-mini" id="gitMini">Loading repository…</div>
+        <button class="ghost full" id="refreshButton">↻ Refresh</button>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">LOCAL PROJECT</div>
+          <h1 id="projectName">SHIPSTATE</h1>
+        </div>
+        <div class="top-actions">
+          <div class="readiness-ring" id="readinessRing"><span id="readiness">0%</span></div>
+          <button class="secondary" id="recoverButton">Recover</button>
+          <button class="primary" id="nextButton">Open next task</button>
+        </div>
+      </header>
+      <section id="content" class="content"></section>
+    </main>
+  </div>
+
+  <div id="drawerBackdrop" class="backdrop hidden"></div>
+  <aside id="drawer" class="drawer hidden">
+    <div class="drawer-head">
+      <div><div class="eyebrow">TASK DETAIL</div><h2 id="drawerTitle"></h2></div>
+      <button class="icon-button" id="closeDrawer">×</button>
+    </div>
+    <div id="drawerBody" class="drawer-body"></div>
+  </aside>
+  <div id="toast" class="toast hidden"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
