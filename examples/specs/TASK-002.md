@@ -1,13 +1,25 @@
-# Demonstrate dependency-aware next action
-Id: TASK-002
+# Surface project health in the operator layer
+
+ID: TASK-002
+Priority: 80
 Depends On: TASK-001
-Priority: 90
+Tags: example, ui
 
 ## Objective
-Demonstrate that dependent work stays ineligible until its prerequisite is verified.
+Consume the accepted project-health behavior in the operator layer.
 
 ## Acceptance Criteria
-- TASK-002 is not selected while TASK-001 is unverified.
+- Operator status can report project health
+- Existing tests continue to pass
 
 ## Verification
 - npm test
+
+## Files
+- src/status.js
+- web/app.js
+
+## Allowed Paths
+- src/**
+- web/**
+- test/**

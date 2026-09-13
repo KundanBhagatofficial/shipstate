@@ -1,41 +1,38 @@
 # SHIPSTATE Agent Contract
 
-This file is normative for AI coding agents working in this repository.
+Read this file completely before changing the repository.
 
-## Product boundary
+## Product identity
 
-SHIPSTATE is an execution control plane, not an IDE, project manager, architecture visualizer, or game-building product. Keep CodeAtlas-style comprehension and GameForge-specific reconstruction logic outside the core.
+SHIPSTATE is a **local-first AI development execution control plane**. It is not an IDE, CodeAtlas, GameForge, CI host, project manager, or chat product.
+
+Its core job is to determine the next eligible engineering task, compile bounded context, execute implementation in isolation, collect deterministic evidence, and integrate only explicitly accepted verified work.
 
 ## Non-negotiable invariants
 
-1. An agent may produce `IMPLEMENTED`; only deterministic verification may produce `VERIFIED`.
-2. A task is executable only when all declared dependencies are `VERIFIED`.
-3. Every state transition must be persisted and journaled.
-4. Failed attempts must survive process restart and be available to future agents without requiring full transcript replay.
-5. The kernel must remain useful without Claude, Codex, cloud accounts, API keys, or paid services.
-6. Agent-specific behavior belongs behind adapters. Core state logic must not depend on one model provider.
-7. Prefer deterministic local mechanisms over LLM calls for state, dependency resolution, verification, hashing, and policy enforcement.
-8. Never silently broaden task scope. Task context is a boundary, not a suggestion.
-9. No automatic merge to `main` until an explicit acceptance mechanism and isolation model exist.
-10. Add complexity only after the current execution kernel proves it is necessary.
+1. Agent output can never directly create `VERIFIED` or `ACCEPTED` state.
+2. Real implementation runs must not mutate the user's main working tree.
+3. Dependencies are satisfied only by `ACCEPTED` tasks.
+4. Verification must produce persisted evidence.
+5. `.git/**`, `.shipstate/**`, `.env`, and `.env.*` remain protected by default.
+6. Acceptance must refuse stale-base or dirty-main integration.
+7. Model/provider-specific behavior stays behind an adapter.
+8. State selection, lifecycle transitions, policy checks, verification and acceptance remain deterministic code, not LLM judgement.
+9. Every state mutation is persisted and journaled.
+10. The kernel must not require a paid subscription, hosted database, vector database, telemetry service, or cloud account.
+11. Keep Node 20+ support.
+12. Do not auto-merge candidate work into the main branch without an explicit SHIPSTATE acceptance action.
 
-## V1 priorities
+## Product boundaries
 
-1. Execution truth
-2. Git/worktree isolation
-3. Evidence completeness
-4. Failure-loop control
-5. Context minimization
-6. Cross-agent handoff
-7. Thin local observability
+Do not add CodeAtlas architecture visualization/LSM functionality to the kernel. Do not add GameForge reference reconstruction/game-specific stages. Future integrations should feed context or tasks through stable boundaries.
 
-## Verification
+## Quality gate
 
-Run before proposing changes:
+Before proposing completion run:
 
 ```bash
-npm test
-node src/cli.js doctor
+npm run certify
 ```
 
-New state-machine behavior requires tests. New verification paths require failure-path tests as well as success-path tests.
+A change that weakens an invariant above requires an explicit architecture decision, not an incidental implementation shortcut.

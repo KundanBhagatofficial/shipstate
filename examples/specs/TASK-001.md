@@ -1,16 +1,23 @@
-# Establish project health command
-Id: TASK-001
+# Add a project health endpoint
+
+ID: TASK-001
 Priority: 100
+Tags: example, backend
 
 ## Objective
-Create a project health command that proves the repository can execute its baseline verification.
+Add a tiny project-health module that exposes an explicit healthy status without changing unrelated behavior.
 
 ## Acceptance Criteria
-- Node test suite exits successfully.
-- The task cannot become VERIFIED without running verification.
+- A health module exists
+- The health result is deterministic
+- Tests pass
 
 ## Verification
 - npm test
 
 ## Files
-- package.json
+- src/status.js
+
+## Allowed Paths
+- src/**
+- test/**
