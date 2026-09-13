@@ -1,0 +1,14 @@
+{
+  "name": "shipstate",
+  "version": "0.1.0-alpha.1",
+  "description": "Local-first execution control plane for AI coding agents",
+  "type": "module",
+  "bin": { "shipstate": "./src/cli.js" },
+  "scripts": {
+    "test": "node --test",
+    "demo": "node src/cli.js demo",
+    "doctor": "node src/cli.js doctor"
+  },
+  "engines": { "node": ">=20" },
+  "license": "MIT"
+}
