@@ -1,5 +1,5 @@
 .shipstate/
 node_modules/
-.DS_Store
 coverage/
+.DS_Store
 *.log
