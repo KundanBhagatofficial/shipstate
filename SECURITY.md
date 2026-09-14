@@ -8,6 +8,7 @@ SHIPSTATE executes tools capable of changing source code, so the boundary is exp
 - Linux resource limits use `prlimit` when available. All command runs support wall-clock timeout and process-tree termination.
 - Claude/Codex network access is enabled by default because their hosted CLIs require it; task contracts can explicitly set `Network: false` for local/offline agents.
 - Environment variables are scrubbed to a minimal allowlist before agent execution.
+- On macOS, Claude Code subscription/OAuth authentication may be stored in the login Keychain. SHIPSTATE grants Keychain IPC/file access only to the Claude adapter when host authentication has already been confirmed. That grant is recorded in run sandbox metadata as `keychainAccess: true`; ordinary commands and other agents do not receive it.
 
 ## Repository policy
 - `.git/**`, `.shipstate/**`, `.env`, `.env.*` are always protected.
