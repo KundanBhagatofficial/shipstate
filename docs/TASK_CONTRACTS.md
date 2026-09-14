@@ -1,47 +1,41 @@
 # Task Contracts
 
-SHIPSTATE tasks are Markdown because they are easy for humans and agents to inspect, diff and generate.
-
 ```markdown
 # Restore session before API boot
-
-ID: AUTH-004
+Id: AUTH-042
+Depends On: AUTH-011
 Priority: 90
-Depends On: DB-002
-Tags: auth, boot
-Requirement: AUTH-SESSION
+Risk: high
+Network: true
+Timeout: 900
+Memory MB: 2048
+CPU Seconds: 600
 
 ## Objective
-Restore an existing user session before any authenticated API request can start.
+Restore persisted session before authenticated API bootstrap.
 
 ## Acceptance Criteria
-- Valid persisted session is restored during bootstrap
-- Invalid refresh token clears persisted authentication
-- API client cannot start before restoration completes
+- No authenticated request occurs before restoration.
 
 ## Verification
-- npm test -- auth
+- npm test
 - npm run typecheck
 
 ## Files
 - src/auth/session.ts
-- src/bootstrap.ts
+- test/auth/session.test.ts
 
 ## Allowed Paths
 - src/auth/**
-- src/bootstrap.ts
 - test/auth/**
 
 ## Protected Paths
 - migrations/**
+
+## Evidence
+- test
+- typecheck
+- diff
 ```
 
-### Fields
-
-`ID` must be unique. `Depends On` is a comma-separated task list. Dependencies must exist and cycles are rejected. Higher `Priority` is selected first among otherwise eligible work.
-
-`Files` are explicit high-value context inputs. The context compiler also performs lightweight lexical repository discovery.
-
-`Allowed Paths` restricts the agent's diff. If omitted, every non-protected path is available. `Protected Paths` extends project/default protection.
-
-`Verification` is mandatory for a task to reach `VERIFIED`.
+If Verification or Allowed Paths are omitted, SHIPSTATE can derive defaults from the detected project profile. Explicit task policy always wins.

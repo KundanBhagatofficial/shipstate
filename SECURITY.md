@@ -1,23 +1,28 @@
 # Security Model
 
-SHIPSTATE executes tools that can modify source code. Its security boundary is therefore explicit.
+SHIPSTATE executes tools capable of changing source code, so the boundary is explicit.
 
-## Defaults
+## Execution
+- Every implementation attempt gets a detached Git worktree at an exact base commit.
+- Linux uses Bubblewrap when available. macOS uses `sandbox-exec` when available. Unsupported hosts fall back to worktree/path-policy isolation and report that reduced level as evidence.
+- Linux resource limits use `prlimit` when available. All command runs support wall-clock timeout and process-tree termination.
+- Claude/Codex network access is enabled by default because their hosted CLIs require it; task contracts can explicitly set `Network: false` for local/offline agents.
+- Environment variables are scrubbed to a minimal allowlist before agent execution.
 
-- The dashboard binds to `127.0.0.1`, not all interfaces.
-- API mutations require a random token created for the current server process.
-- Agent execution happens in detached Git worktrees.
-- `.git/**`, `.shipstate/**`, `.env`, and `.env.*` are protected paths.
-- Verification and acceptance are SHIPSTATE-owned transitions.
-- Acceptance requires a clean main working tree and unchanged base `HEAD`.
-- No secrets, telemetry, remote database, analytics SDK, or hosted control plane are included.
+## Repository policy
+- `.git/**`, `.shipstate/**`, `.env`, `.env.*` are always protected.
+- Allowed/protected task paths are enforced before verification.
+- Design Locks may additionally protect architecture-sensitive paths.
+- Candidate code is committed only after deterministic verification.
+- Acceptance requires a clean main tree and the same base `HEAD`; stale candidates are refused.
 
-## Trust assumptions
+## Local dashboard
+- Binds to `127.0.0.1` by default.
+- Mutations require a random per-process token.
+- The token is placed only in the launch URL fragment and then stored in browser session storage.
 
-Verification commands in task contracts are executable shell commands. Import task contracts only from sources you trust or review them before execution.
+## Trusted inputs
+Verification commands from task contracts are executable shell commands. Review imported task/spec documents before approval.
 
-Claude/Codex adapters invoke executables already installed on the local machine. Their own authentication, network behavior and terms are outside SHIPSTATE.
-
-## Reporting
-
-For security issues, open a private security advisory on the GitHub repository rather than publishing exploit details in a public issue.
+## No secrets/telemetry
+SHIPSTATE includes no analytics SDK, hosted database, remote telemetry, cloud secret store, or mandatory account.

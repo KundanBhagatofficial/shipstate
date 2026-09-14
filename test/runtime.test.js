@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import { executeProcess } from '../src/runtime.js';
+test('runtime enforces timeout',async()=>{const log=path.join(fs.mkdtempSync(path.join(os.tmpdir(),'runtime-')),'run.log');const r=await executeProcess({runId:'r1',cmd:process.execPath,args:['-e','setTimeout(()=>{},1000)'],cwd:process.cwd(),env:process.env,timeoutMs:50,logPath:log});assert.equal(r.timedOut,true);});

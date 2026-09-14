@@ -1,114 +1,32 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { paths, readConfig, readState } from './store.js';
-import { hash } from './core.js';
-
-const TEXT_EXTENSIONS = new Set(['.js','.mjs','.cjs','.ts','.tsx','.jsx','.json','.md','.css','.html','.yml','.yaml','.toml','.py','.go','.rs','.java','.kt','.swift','.sh']);
-const IGNORE_DIRS = new Set(['.git','.shipstate','node_modules','dist','build','coverage','.next','.turbo','vendor']);
-
-function safeRead(file, max = 16000) {
-  try { return fs.readFileSync(file, 'utf8').slice(0, max); } catch { return ''; }
+import fs from 'node:fs';import path from 'node:path';import { paths,readState,recordMetric } from './store.js';import { sha256,estimateTokens,walk,unique } from './utils.js';import { gitHistory } from './git.js';import { callIntegration } from './integrations.js';
+const IGNORE=['.git/**','.shipstate/**','node_modules/**','vendor/**','dist/**','build/**','.next/**','coverage/**'];
+function read(root,rel,max=12000){try{return fs.readFileSync(path.join(root,rel),'utf8').slice(0,max);}catch{return '';}}
+function importsFor(file,text){const out=[];const ext=path.extname(file);
+ if(['.js','.jsx','.ts','.tsx','.mjs','.cjs'].includes(ext)){for(const m of text.matchAll(/(?:from\s+|require\s*\(|import\s*\()?["']([^"']+)["']/g))if(m[1]?.startsWith('.'))out.push(m[1]);}
+ else if(ext==='.py'){for(const m of text.matchAll(/^\s*(?:from\s+([\w.]+)|import\s+([\w.]+))/gm))out.push((m[1]||m[2]||'').replaceAll('.','/'));}
+ else if(ext==='.go'){for(const m of text.matchAll(/["`]([^"`]+)["`]/g))if(m[1]&&!m[1].includes(' '))out.push(m[1]);}
+ else if(ext==='.rs'){for(const m of text.matchAll(/^\s*(?:use|mod)\s+([\w:]+)/gm))out.push(m[1].replaceAll('::','/'));}
+ else if(['.java','.kt','.kts'].includes(ext)){for(const m of text.matchAll(/^\s*import\s+([\w.]+)/gm))out.push(m[1].replaceAll('.','/'));}
+ return unique(out);
 }
-
-function walk(root, current = root, out = []) {
-  let entries = [];
-  try { entries = fs.readdirSync(current, { withFileTypes: true }); } catch { return out; }
-  for (const entry of entries) {
-    if (IGNORE_DIRS.has(entry.name)) continue;
-    const absolute = path.join(current, entry.name);
-    if (entry.isDirectory()) walk(root, absolute, out);
-    else if (entry.isFile() && TEXT_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) out.push(path.relative(root, absolute));
-    if (out.length >= 2500) break;
-  }
-  return out;
+function symbols(text){const out=[];for(const re of [/\b(?:function|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)/g,/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*[=:]/g,/^\s*(?:def|class)\s+([A-Za-z_]\w*)/gm,/\bfunc\s+(?:\([^)]*\)\s*)?([A-Za-z_]\w*)/g])for(const m of text.matchAll(re))out.push(m[1]);return unique(out).slice(0,100);}
+function resolveImport(root,from,imp,all){if(!imp.startsWith('.'))return null;const base=path.posix.normalize(path.posix.join(path.posix.dirname(from),imp));const candidates=[base,`${base}.ts`,`${base}.tsx`,`${base}.js`,`${base}.jsx`,`${base}.py`,`${base}/index.ts`,`${base}/index.js`];return candidates.find(c=>all.has(c))||null;}
+export function buildRepositoryIndex(root=process.cwd()){
+ const files=walk(root,{ignore:IGNORE}).filter(f=>!f.includes('\0'));const set=new Set(files);const index={files:{},symbols:{},reverseImports:{}};
+ for(const f of files){let text='';try{const st=fs.statSync(path.join(root,f));if(st.size>300000)continue;text=fs.readFileSync(path.join(root,f),'utf8');}catch{continue;}const imps=importsFor(f,text);const resolved=imps.map(i=>resolveImport(root,f,i,set)).filter(Boolean);const syms=symbols(text);index.files[f]={imports:resolved,symbols:syms,size:Buffer.byteLength(text)};for(const s of syms)(index.symbols[s]||=[]).push(f);for(const r of resolved)(index.reverseImports[r]||=[]).push(f);}
+ return index;
 }
-
-function keywords(task) {
-  return `${task.title} ${task.objective} ${(task.acceptanceCriteria ?? []).join(' ')}`
-    .toLowerCase().match(/[a-z][a-z0-9_-]{3,}/g)?.filter((value) => !['with','from','this','that','should','must','into','when','then','only','task'].includes(value)).slice(0, 20) ?? [];
-}
-
-function autoDiscover(task, root, limit = 8) {
-  const words = keywords(task);
-  if (!words.length) return [];
-  const scored = [];
-  for (const rel of walk(root)) {
-    const lowerName = rel.toLowerCase();
-    const content = safeRead(path.join(root, rel), 24000).toLowerCase();
-    let score = 0;
-    for (const word of words) {
-      if (lowerName.includes(word)) score += 5;
-      const matches = content.split(word).length - 1;
-      score += Math.min(matches, 3);
-    }
-    if (score > 0) scored.push({ rel, score });
-  }
-  return scored.sort((a,b) => b.score - a.score || a.rel.localeCompare(b.rel)).slice(0, limit).map((item) => item.rel);
-}
-
-function recentRuns(taskId, state) {
-  return state.runs.filter((run) => run.taskId === taskId).slice(-5);
-}
-
-export function compileContext(taskId, root = process.cwd(), sourceRoot = root) {
-  const state = readState(root);
-  const config = readConfig(root);
-  const task = state.tasks.find((item) => item.id === taskId);
-  if (!task) throw new Error(`Unknown task: ${taskId}`);
-
-  const explicit = task.files ?? [];
-  const discovered = autoDiscover(task, sourceRoot).filter((file) => !explicit.includes(file));
-  const selected = [...explicit, ...discovered].slice(0, 14);
-  const chunks = [
-    '# SHIPSTATE Execution Context\n',
-    `Project: ${state.project.name}\nTask: ${task.id}\nTitle: ${task.title}\nPriority: ${task.priority ?? 0}\n`,
-    `## Objective\n${task.objective || task.title}\n`
-  ];
-
-  if (task.requirement) chunks.push(`## Requirement\n${task.requirement}\n`);
-  if (task.acceptanceCriteria?.length) chunks.push(`## Acceptance Criteria\n${task.acceptanceCriteria.map((item) => `- ${item}`).join('\n')}\n`);
-  if (task.dependsOn?.length) {
-    const depLines = task.dependsOn.map((depId) => {
-      const dep = state.tasks.find((item) => item.id === depId);
-      return `- ${depId}: ${dep?.state ?? 'MISSING'}${dep?.acceptedCommit ? ` @ ${dep.acceptedCommit.slice(0, 12)}` : ''}`;
-    });
-    chunks.push(`## Integrated Dependencies\n${depLines.join('\n')}\n`);
-  }
-  if (task.allowedPaths?.length) chunks.push(`## Allowed Paths\n${task.allowedPaths.map((item) => `- ${item}`).join('\n')}\n`);
-  if (task.protectedPaths?.length) chunks.push(`## Additional Protected Paths\n${task.protectedPaths.map((item) => `- ${item}`).join('\n')}\n`);
-
-  const runs = recentRuns(taskId, state);
-  if (runs.length) {
-    chunks.push(`## Previous Attempts\n${runs.map((run) => `- ${run.id} | ${run.agent} | ${run.status} | ${run.failureFingerprint ?? 'no failure fingerprint'}${run.changedFiles?.length ? ` | changed: ${run.changedFiles.join(', ')}` : ''}`).join('\n')}\n`);
-  }
-
-  if (selected.length) {
-    chunks.push('## Repository Context\n');
-    for (const rel of selected) {
-      const content = safeRead(path.resolve(sourceRoot, rel));
-      if (!content) continue;
-      chunks.push(`### ${rel}\n\`\`\`\n${content}\n\`\`\`\n`);
-    }
-  }
-
-  if (task.verification?.length) chunks.push(`## Verification Contract\n${task.verification.map((item) => `- ${item}`).join('\n')}\n`);
-  chunks.push('## Execution Rules\n- Work only on this task.\n- Do not modify .shipstate or .git.\n- Respect allowed/protected paths.\n- Preserve unrelated behavior.\n- Do not claim VERIFIED or ACCEPTED; SHIPSTATE owns those transitions.\n- Finish with code changes, not an explanation-only response.\n');
-
-  let text = chunks.join('\n');
-  const maxBytes = config.maxContextBytes ?? 120000;
-  if (Buffer.byteLength(text) > maxBytes) text = `${text.slice(0, maxBytes - 200)}\n\n[Context truncated by SHIPSTATE budget]\n`;
-  const out = path.join(paths(root).contexts, `${taskId}.md`);
-  fs.mkdirSync(path.dirname(out), { recursive: true });
-  fs.writeFileSync(out, text);
-  const bytes = Buffer.byteLength(text);
-  return {
-    path: out,
-    text,
-    hash: hash(text),
-    bytes,
-    estimatedTokens: Math.ceil(bytes / 4),
-    files: selected,
-    explicitFiles: explicit,
-    discoveredFiles: discovered
-  };
-}
+function lexicalScore(file,task){const hay=`${file} ${task.title} ${task.objective} ${(task.acceptanceCriteria||[]).join(' ')}`.toLowerCase();const words=unique(`${task.title} ${task.objective}`.toLowerCase().match(/[a-z][a-z0-9_-]{2,}/g)||[]).filter(w=>!['the','and','for','with','from','this','that','task'].includes(w));return words.reduce((n,w)=>n+(hay.includes(w)?1:0),0);}
+export function selectContextFiles(task,root,index,budgetTokens=12000){const all=Object.keys(index.files);const picked=[];const add=f=>{if(f&&index.files[f]&&!picked.includes(f))picked.push(f);};for(const f of task.files||[])add(f);
+ const ranked=all.map(f=>[f,lexicalScore(f,task)]).filter(([,s])=>s>0).sort((a,b)=>b[1]-a[1]).slice(0,20).map(([f])=>f);ranked.forEach(add);
+ for(const f of [...picked]){for(const d of index.files[f]?.imports||[])add(d);for(const r of index.reverseImports[f]||[])add(r);const base=path.basename(f).replace(/\.(tsx?|jsx?|py|go|rs|java|kt)$/,'');for(const cand of all)if((cand.includes('/test')||/\.(test|spec)\./.test(cand))&&cand.toLowerCase().includes(base.toLowerCase()))add(cand);}
+ let tokens=0;const selected=[];for(const f of picked){const content=read(root,f);const t=estimateTokens(content);if(selected.length&&tokens+t>budgetTokens)continue;selected.push({file:f,content,tokens:t,symbols:index.files[f]?.symbols||[]});tokens+=t;}return {selected,tokens};}
+function priorRuns(taskId,s){return s.runs.filter(r=>r.taskId===taskId).slice(-5);}
+export function compileContext(taskId,root=process.cwd(),opts={}){const s=readState(root);const task=s.tasks.find(t=>t.id===taskId);if(!task)throw new Error(`Unknown task: ${taskId}`);const semantic=callIntegration('codeAtlas','context',{taskId,task},root,{optional:true});const taskForContext=semantic?.files?.length?{...task,files:[...(task.files||[]),...semantic.files]}:task;const index=buildRepositoryIndex(root);const budget=Number(opts.budgetTokens||s.project.contextBudgetTokens||12000);const sel=selectContextFiles(taskForContext,root,index,budget);const chunks=[`# SHIPSTATE Execution Context`,`## Task\n${task.id}: ${task.title}`,`## Objective\n${task.objective||task.title}`];
+ if(task.acceptanceCriteria?.length)chunks.push(`## Acceptance Criteria\n${task.acceptanceCriteria.map(x=>`- ${x}`).join('\n')}`);if(task.dependsOn?.length)chunks.push(`## Accepted Dependencies\n${task.dependsOn.map(x=>`- ${x}`).join('\n')}`);if(s.locks?.length)chunks.push(`## Design Locks\n${s.locks.map(l=>`- [${l.severity||'normal'}] ${l.id}: ${l.statement}`).join('\n')}`);
+ chunks.push(`## Project Profile\n${JSON.stringify({ecosystems:s.profile?.ecosystems,languages:s.profile?.languages,frameworks:s.profile?.frameworks,commands:s.profile?.commands},null,2)}`);
+ const pr=priorRuns(taskId,s);if(semantic?.notes)chunks.push(`## CodeAtlas Context Provider\n${semantic.notes}`);if(pr.length)chunks.push(`## Previous Attempts\n${pr.map(r=>`- ${r.id} ${r.agent} ${r.status}${r.failureFingerprint?` fingerprint:${r.failureFingerprint}`:''}`).join('\n')}`);
+ const hist=gitHistory(root,sel.selected.map(x=>x.file),8);if(hist.length)chunks.push(`## Relevant Git History\n${hist.map(x=>`- ${x}`).join('\n')}`);
+ chunks.push(`## Repository Context`);for(const x of sel.selected)chunks.push(`### ${x.file}\nSymbols: ${(x.symbols||[]).join(', ')||'n/a'}\n\`\`\`\n${x.content}\n\`\`\``);
+ chunks.push(`## Execution Constraints\n- Stay within allowed paths.\n- Never edit .git, .shipstate, or .env files.\n- Do not claim VERIFIED or ACCEPTED; SHIPSTATE owns those transitions.`);
+ const text=chunks.join('\n\n');const p=paths(root);fs.mkdirSync(p.contexts,{recursive:true});const out=path.join(p.contexts,`${taskId}.md`);fs.writeFileSync(out,text);const metric={at:new Date().toISOString(),taskId,bytes:Buffer.byteLength(text),tokens:estimateTokens(text),repositoryFiles:Object.keys(index.files).length,repositoryBytes:Object.values(index.files).reduce((a,x)=>a+(x.size||0),0),selectedFiles:sel.selected.map(x=>x.file),selectedFileCount:sel.selected.length,budgetTokens:budget,hash:sha256(text)};recordMetric('contexts',metric,root);return {path:out,text,hash:metric.hash,bytes:metric.bytes,tokens:metric.tokens,files:metric.selectedFiles,index};}

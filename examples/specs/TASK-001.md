@@ -1,23 +1,25 @@
-# Add a project health endpoint
-
-ID: TASK-001
+# Add health endpoint
+Id: TASK-001
 Priority: 100
-Tags: example, backend
+Risk: low
 
 ## Objective
-Add a tiny project-health module that exposes an explicit healthy status without changing unrelated behavior.
+Implement a deterministic health endpoint or health function for the example project.
 
 ## Acceptance Criteria
-- A health module exists
-- The health result is deterministic
-- Tests pass
+- Health reports an explicit OK state.
 
 ## Verification
 - npm test
 
 ## Files
-- src/status.js
+- src/health.js
+- test/health.test.js
 
 ## Allowed Paths
 - src/**
 - test/**
+
+## Evidence
+- test
+- diff

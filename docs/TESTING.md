@@ -1,47 +1,26 @@
-# Release Testing
+# 1.0 Certification
 
-## Automated certification
+## Automated
+`npm run certify` runs syntax checks, the unit/integration suite and a fresh-repository lifecycle smoke.
 
-```bash
-npm run certify
-```
+GitHub Actions runs the same gate on Ubuntu, macOS and Windows with Node 20 and Node 22.
 
-Expected result: syntax PASS, all tests PASS, smoke PASS.
-
-## Manual no-subscription test
-
-Use a disposable Git repository or a branch you are comfortable modifying.
-
-1. Ensure `git status` is clean.
-2. Run `shipstate init`.
-3. Commit the `.gitignore` change if SHIPSTATE added one.
-4. Create/import one task whose `Allowed Paths` is narrow and whose verification command is deterministic.
-5. Run `shipstate serve --open` and confirm Now/Tasks/Runs/Evidence/System render.
-6. Run the task using `manual` mode from the dashboard or CLI.
-7. Open the returned `worktreePath` and modify an allowed file.
-8. Confirm the original repository file is unchanged.
-9. Verify the task. Confirm it reaches `VERIFIED` and evidence appears.
-10. Accept the task. Confirm the real branch now contains the change and the task reaches `ACCEPTED`.
-
-## Negative tests
-
-- Change a file outside `Allowed Paths`: verification must block the task.
-- Create `.env.local` in the worktree: policy must block the task.
-- Move the main branch HEAD after verification but before acceptance: acceptance must refuse the candidate.
-- Fail an identical agent attempt three times: task must become `BLOCKED`.
-- Kill SHIPSTATE while a task is RUNNING/VERIFYING/ACCEPTING and run `shipstate recover`: it must return to a resumable state.
-- POST to the local API without `X-Shipstate-Token`: response must be HTTP 403.
-
-## Real-agent test
-
-If a supported CLI is already available:
+## Real agent certification
+A real authenticated local CLI is intentionally not embedded in CI secrets. Run on a developer machine:
 
 ```bash
-shipstate doctor
-shipstate run TASK-001 --agent=claude
-# or --agent=codex
-shipstate verify TASK-001
-shipstate accept TASK-001
+shipstate certify-agent claude
+shipstate certify-agent codex
 ```
 
-No paid service is required to perform the manual-mode certification.
+The harness creates a disposable Git repository, asks the real agent to make one bounded change, then performs SHIPSTATE verification and acceptance. A pass proves adapter invocation, context handoff, sandbox behavior, evidence and integration on that host.
+
+## Adversarial checks
+- edit `.env.local` from a worktree: verification must block
+- edit outside Allowed Paths: verification must block
+- move main HEAD after verification: acceptance must refuse
+- interrupt RUNNING/VERIFYING/ACCEPTING: `shipstate recover` must restore a resumable state
+- corrupt `state.json`: last-good snapshot or journal replay must recover
+- mutate dashboard without token: HTTP 403
+- use a task with an ACCEPTED dependency missing: it must not become eligible
+- run independent path scopes in a parallel scheduler batch; overlapping scopes must not share a batch

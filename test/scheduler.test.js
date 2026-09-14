@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import { independentBatch } from '../src/scheduler.js';
+test('parallel scheduler avoids overlapping path scopes',()=>{const tasks=[{id:'A',state:'PENDING',dependsOn:[],allowedPaths:['src/auth/**'],priority:3},{id:'B',state:'PENDING',dependsOn:[],allowedPaths:['src/pay/**'],priority:2},{id:'C',state:'PENDING',dependsOn:[],allowedPaths:['src/auth/ui/**'],priority:1}];const b=independentBatch(tasks,3);assert.deepEqual(b.map(x=>x.id),['A','B']);});

@@ -1,64 +1,12 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { now } from './core.js';
-
-function list(value = '') { return value.split(',').map((x) => x.trim()).filter(Boolean); }
-function bulletsFor(section, sections) { return sections[section] ?? []; }
-
-export function parseTaskMarkdown(text, file = 'task.md') {
-  const lines = text.split(/\r?\n/);
-  const title = (lines.find((line) => line.startsWith('# ')) ?? '').slice(2).trim();
-  const meta = {};
-  const sections = {};
-  let section = '';
-
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (line.startsWith('## ')) {
-      section = line.slice(3).trim().toLowerCase();
-      sections[section] ??= [];
-      continue;
-    }
-    if (!section) {
-      const match = line.match(/^([A-Za-z][A-Za-z -]+):\s*(.+)$/);
-      if (match) meta[match[1].toLowerCase().replace(/[ -]/g, '')] = match[2].trim();
-      continue;
-    }
-    if (line.startsWith('- ')) sections[section].push(line.slice(2).trim());
-    else if (line) sections[section].push(line);
-  }
-
-  const taskId = meta.id || path.basename(file, path.extname(file)).toUpperCase();
-  const objective = bulletsFor('objective', sections).join(' ');
-  return {
-    id: taskId,
-    title: title || taskId,
-    requirement: meta.requirement || null,
-    objective: objective || title || taskId,
-    acceptanceCriteria: bulletsFor('acceptance criteria', sections),
-    verification: bulletsFor('verification', sections),
-    files: bulletsFor('files', sections),
-    allowedPaths: bulletsFor('allowed paths', sections),
-    protectedPaths: bulletsFor('protected paths', sections),
-    notes: bulletsFor('notes', sections),
-    dependsOn: list(meta.dependson),
-    tags: list(meta.tags),
-    priority: Number(meta.priority || 0),
-    state: 'PENDING',
-    createdAt: now(),
-    updatedAt: now(),
-    source: path.relative(process.cwd(), file)
-  };
+import fs from 'node:fs'; import path from 'node:path'; import { now } from './utils.js';
+const list=v=>(v||'').split(',').map(x=>x.trim()).filter(Boolean);
+function bullets(lines,section){const out=[];let active=false;for(const raw of lines){const l=raw.trim();if(l.startsWith('## ')){active=l.slice(3).toLowerCase().includes(section);continue;} if(active&&l.startsWith('- ')) out.push(l.slice(2).trim());}return out;}
+function textSection(lines,section){let active=false;const out=[];for(const raw of lines){const l=raw.trim();if(l.startsWith('## ')){active=l.slice(3).toLowerCase().includes(section);continue;}if(active&&l&&!l.startsWith('- '))out.push(l);}return out.join(' ');}
+export function parseTaskMarkdown(text,file='task.md'){
+ const lines=text.split(/\r?\n/); const title=(lines.find(l=>l.startsWith('# '))||'').slice(2).trim(); const meta={}; let section=false;
+ for(const raw of lines){const l=raw.trim(); if(l.startsWith('## ')){section=true;continue;} if(section) continue; const m=l.match(/^([A-Za-z][A-Za-z ]+):\s*(.+)$/); if(m) meta[m[1].toLowerCase().replaceAll(' ','')]=m[2].trim();}
+ const taskId=meta.id||path.basename(file,path.extname(file)).toUpperCase();
+ return {id:taskId,title:title||taskId,objective:textSection(lines,'objective')||title,acceptanceCriteria:bullets(lines,'acceptance'),verification:bullets(lines,'verification'),files:bullets(lines,'files'),allowedPaths:bullets(lines,'allowed paths'),protectedPaths:bullets(lines,'protected paths'),evidenceRequired:bullets(lines,'evidence'),dependsOn:list(meta.dependson),priority:Number(meta.priority||0),risk:(meta.risk||'medium').toLowerCase(),network:meta.network?['true','yes','1'].includes(meta.network.toLowerCase()):undefined,timeoutMs:meta.timeout?Number(meta.timeout)*1000:undefined,memoryMb:meta.memorymb?Number(meta.memorymb):undefined,cpuSeconds:meta.cpuseconds?Number(meta.cpuseconds):undefined,state:'PENDING',createdAt:now(),updatedAt:now(),source:file};
 }
-
-export function loadTaskFiles(target) {
-  const stat = fs.statSync(target);
-  const files = stat.isDirectory()
-    ? fs.readdirSync(target).filter((file) => file.toLowerCase().endsWith('.md')).sort().map((file) => path.join(target, file))
-    : [target];
-  return files.map((file) => parseTaskMarkdown(fs.readFileSync(file, 'utf8'), file));
-}
-
-export function taskTemplate(id = 'TASK-001', title = 'Describe the task') {
-  return `# ${title}\n\nID: ${id}\nPriority: 10\nDepends On:\nTags: feature\n\n## Objective\nDescribe the smallest independently verifiable outcome.\n\n## Acceptance Criteria\n- Observable behavior is correct\n- Existing behavior is preserved\n\n## Verification\n- npm test\n\n## Files\n- src/example.js\n\n## Allowed Paths\n- src/**\n- test/**\n\n## Protected Paths\n- .github/**\n`;
-}
+export function loadTaskFiles(target){const st=fs.statSync(target);const files=st.isDirectory()?fs.readdirSync(target).filter(f=>f.endsWith('.md')).sort().map(f=>path.join(target,f)):[target];return files.map(f=>parseTaskMarkdown(fs.readFileSync(f,'utf8'),f));}
+export function taskTemplate(id,title){return `# ${title}\nId: ${id}\nPriority: 50\nRisk: medium\n\n## Objective\nDescribe the implementation outcome.\n\n## Acceptance Criteria\n- Add deterministic acceptance criteria.\n\n## Verification\n- Add a deterministic command.\n\n## Files\n- Add likely context files.\n\n## Allowed Paths\n- src/**\n- test/**\n\n## Evidence\n- command\n- diff\n`;}

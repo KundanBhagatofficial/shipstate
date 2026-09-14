@@ -1,241 +1,33 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { id, now, assertTransition, SCHEMA_VERSION } from './core.js';
+import fs from 'node:fs'; import path from 'node:path';
+import { id,now,sha256,ensureDir,readJson,writeJsonAtomic } from './utils.js'; import { assertTransition } from './core.js'; import { detectProject } from './profile.js';
+export const CURRENT_SCHEMA=3;
+export function paths(root=process.cwd()){const base=path.join(root,'.shipstate');return {base,state:path.join(base,'state.json'),prev:path.join(base,'state.prev.json'),events:path.join(base,'events.jsonl'),runs:path.join(base,'runs'),contexts:path.join(base,'contexts'),worktrees:path.join(base,'worktrees'),locks:path.join(base,'locks.json'),profiles:path.join(base,'profile.json'),backups:path.join(base,'backups')};}
+export const initialized=(root=process.cwd())=>fs.existsSync(paths(root).state);
+function ensureJournalFormat(root){
+ const f=paths(root).events;if(!fs.existsSync(f))return;const lines=fs.readFileSync(f,'utf8').split(/\n/).filter(Boolean);if(!lines.length)return;let parsed;try{parsed=lines.map(JSON.parse);}catch{return;}if(parsed.every(e=>e.hash&&e.prevHash))return;ensureDir(paths(root).backups);fs.copyFileSync(f,path.join(paths(root).backups,`events-legacy-${Date.now()}.jsonl`));let prev='GENESIS';const out=[];for(const old of parsed){const base={id:old.id||id('evt'),type:old.type||'LEGACY_EVENT',at:old.at||now(),payload:old.payload||old,prevHash:prev};const event={...base,hash:sha256(JSON.stringify(base))};out.push(JSON.stringify(event));prev=event.hash;}fs.writeFileSync(f,out.join('\n')+'\n');}
 
-const DIR = '.shipstate';
+function emptyState(root,name){return {schemaVersion:CURRENT_SCHEMA,project:{id:id('project'),name:name||path.basename(root),createdAt:now(),allowedPaths:[],protectedPaths:[],defaultAgent:'manual',autoAcceptRisk:['low']},profile:detectProject(root),tasks:[],runs:[],evidence:[],decisions:[],metrics:{contexts:[],agentRuns:[]},locks:[],plans:[],remotes:[]};}
+function migrate(s){let out=structuredClone(s||{});let v=Number(out.schemaVersion||1);if(v<2){out.decisions||=[];out.metrics||={contexts:[],agentRuns:[]};out.locks||=[];out.plans||=[];v=2;}if(v<3){out.profile||={};out.remotes||=[];out.project||={};out.project.autoAcceptRisk||=['low'];v=3;}out.schemaVersion=CURRENT_SCHEMA;return out;}
+export function initStore(root=process.cwd(),name){const p=paths(root);for(const d of [p.base,p.runs,p.contexts,p.worktrees,p.backups])ensureDir(d);if(!fs.existsSync(p.state))writeJsonAtomic(p.state,emptyState(root,name));if(!fs.existsSync(p.events))fs.writeFileSync(p.events,'');ensureJournalFormat(root);appendEvent('PROJECT_INITIALIZED',{root,project:readJson(p.state)?.project,profile:readJson(p.state)?.profile,schemaVersion:CURRENT_SCHEMA},root);ensureGitignore(root);return readState(root);}
+function ensureGitignore(root){const f=path.join(root,'.gitignore');let t=fs.existsSync(f)?fs.readFileSync(f,'utf8'):'';if(!t.split(/\r?\n/).includes('.shipstate/')){if(t&&!t.endsWith('\n'))t+='\n';fs.writeFileSync(f,t+'.shipstate/\n');}}
+export function readState(root=process.cwd()){ensureJournalFormat(root);const p=paths(root);let raw=readJson(p.state);if(!raw&&fs.existsSync(p.prev)){raw=readJson(p.prev);if(raw)writeJsonAtomic(p.state,raw);}if(!raw)throw new Error('SHIPSTATE state missing or invalid; no last-good snapshot available');const s=migrate(raw);if(s.schemaVersion!==raw.schemaVersion)writeState(s,root);return s;}
+export function writeState(s,root=process.cwd()){s.schemaVersion=CURRENT_SCHEMA;const p=paths(root);if(fs.existsSync(p.state)){try{fs.copyFileSync(p.state,p.prev);}catch{}}writeJsonAtomic(p.state,s);}
+function lastEventHash(root){try{const lines=fs.readFileSync(paths(root).events,'utf8').trim().split(/\n/).filter(Boolean);if(!lines.length)return 'GENESIS';return JSON.parse(lines.at(-1)).hash||'GENESIS';}catch{return 'GENESIS';}}
+export function appendEvent(type,payload,root=process.cwd()){ensureJournalFormat(root);const prevHash=lastEventHash(root);const base={id:id('evt'),type,at:now(),payload,prevHash};const event={...base,hash:sha256(JSON.stringify(base))};ensureDir(paths(root).base);fs.appendFileSync(paths(root).events,JSON.stringify(event)+'\n');return event;}
+export function verifyJournal(root=process.cwd()){if(!fs.existsSync(paths(root).events))return {valid:true,count:0};let prev='GENESIS',count=0;for(const line of fs.readFileSync(paths(root).events,'utf8').split(/\n/).filter(Boolean)){const e=JSON.parse(line);const {hash,...base}=e;if(e.prevHash!==prev||sha256(JSON.stringify(base))!==hash)return {valid:false,count,error:`broken event chain at ${e.id}`};prev=hash;count++;}return {valid:true,count,lastHash:prev};}
+export function backupState(root=process.cwd()){const p=paths(root);ensureDir(p.backups);const out=path.join(p.backups,`state-${Date.now()}.json`);fs.copyFileSync(p.state,out);return out;}
+export function refreshProfile(root=process.cwd()){const s=readState(root);s.profile=detectProject(root);appendEvent('PROFILE_REFRESHED',{profile:s.profile},root);writeState(s,root);return s.profile;}
+export function addTasks(tasks,root=process.cwd()){const s=readState(root);const ids=new Set(s.tasks.map(t=>t.id));for(const raw of tasks){const t={...raw};if(ids.has(t.id))throw new Error(`Duplicate task: ${t.id}`);if(!(t.verification||[]).length)t.verification=[s.profile?.commands?.test,s.profile?.commands?.typecheck,s.profile?.commands?.lint].filter(Boolean);if(!(t.allowedPaths||[]).length)t.allowedPaths=[...(s.profile?.sourceDirs||[]).map(x=>`${x}/**`),...(s.profile?.testDirs||[]).filter(Boolean).map(x=>`${x}/**`)];s.tasks.push(t);appendEvent('TASK_IMPORTED',{task:t},root);}writeState(s,root);return s;}
+export function transition(taskId,to,meta={},root=process.cwd()){const s=readState(root);const t=s.tasks.find(x=>x.id===taskId);if(!t)throw new Error(`Unknown task: ${taskId}`);assertTransition(t.state,to);const from=t.state;t.state=to;t.updatedAt=now();Object.assign(t,meta);appendEvent('TASK_TRANSITION',{taskId,from,to,meta},root);writeState(s,root);return t;}
+export function mutateTask(taskId,patch,event='TASK_UPDATED',root=process.cwd()){const s=readState(root);const t=s.tasks.find(x=>x.id===taskId);if(!t)throw new Error(`Unknown task: ${taskId}`);Object.assign(t,patch,{updatedAt:now()});appendEvent(event,{taskId,patch},root);writeState(s,root);return t;}
+export function recordRun(run,root=process.cwd()){const s=readState(root);const i=s.runs.findIndex(r=>r.id===run.id);if(i>=0)s.runs[i]=run;else s.runs.push(run);appendEvent('RUN_RECORDED',{run},root);writeState(s,root);return run;}
+export function recordEvidence(items,root=process.cwd()){const s=readState(root);s.evidence.push(...items);for(const e of items)appendEvent('EVIDENCE_RECORDED',{evidence:e},root);writeState(s,root);return items;}
+export function recordDecision(decision,root=process.cwd()){const s=readState(root);s.decisions.push(decision);appendEvent('DECISION_RECORDED',decision,root);writeState(s,root);return decision;}
+export function recordMetric(kind,item,root=process.cwd()){const s=readState(root);s.metrics[kind]||=[];s.metrics[kind].push(item);appendEvent('METRIC_RECORDED',{kind,item},root);writeState(s,root);return item;}
+export function setLocks(locks,root=process.cwd()){const s=readState(root);s.locks=locks;appendEvent('DESIGN_LOCKS_UPDATED',{count:locks.length,locks},root);writeState(s,root);return locks;}
+export function addPlan(plan,root=process.cwd()){const s=readState(root);s.plans.push(plan);appendEvent('PLAN_CREATED',{plan},root);writeState(s,root);return plan;}
+export function rebuildFromSnapshot(root=process.cwd()){const j=verifyJournal(root);if(!j.valid)throw new Error(j.error);return {ok:true,journal:j,state:readState(root)};}
 
-export function paths(root = process.cwd()) {
-  const base = path.join(root, DIR);
-  return {
-    base,
-    state: path.join(base, 'state.json'),
-    events: path.join(base, 'events.jsonl'),
-    config: path.join(base, 'config.json'),
-    runs: path.join(base, 'runs'),
-    contexts: path.join(base, 'contexts'),
-    artifacts: path.join(base, 'artifacts'),
-    worktrees: path.join(base, 'worktrees'),
-    backups: path.join(base, 'backups')
-  };
-}
-
-export function initialized(root = process.cwd()) { return fs.existsSync(paths(root).state); }
-
-function baseState(root) {
-  return {
-    schemaVersion: SCHEMA_VERSION,
-    project: { id: id('project'), name: path.basename(root), root: path.resolve(root), createdAt: now() },
-    tasks: [],
-    evidence: [],
-    runs: [],
-    decisions: []
-  };
-}
-
-function baseConfig() {
-  return {
-    defaultAgent: 'dry-run',
-    maxContextBytes: 120000,
-    server: { host: '127.0.0.1', port: 4317 },
-    policy: { allowedPaths: [], protectedPaths: [] }
-  };
-}
-
-export function initStore(root = process.cwd(), options = {}) {
-  const p = paths(root);
-  for (const dir of [p.base,p.runs,p.contexts,p.artifacts,p.worktrees,p.backups]) fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(p.state)) {
-    const state = baseState(root);
-    if (options.name) state.project.name = options.name;
-    writeState(state, root);
-  }
-  if (!fs.existsSync(p.config)) atomicWriteJson(p.config, baseConfig());
-  if (!fs.existsSync(p.events)) fs.writeFileSync(p.events, '');
-  appendEvent('PROJECT_INITIALIZED', { root: path.resolve(root) }, root);
-  return readState(root);
-}
-
-function atomicWriteJson(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const temp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(temp, `${JSON.stringify(value, null, 2)}\n`);
-  fs.renameSync(temp, file);
-}
-
-function migrateState(state, root) {
-  let changed = false;
-  if (!state.schemaVersion) {
-    state.schemaVersion = 1;
-    state.decisions ??= [];
-    changed = true;
-  }
-  if (state.schemaVersion === 1) {
-    for (const task of state.tasks ?? []) {
-      if (task.state === 'VERIFIED' && !task.acceptedAt) task.state = 'ACCEPTED';
-    }
-    state.schemaVersion = 2;
-    state.project.root ??= path.resolve(root);
-    changed = true;
-  }
-  return { state, changed };
-}
-
-export function readState(root = process.cwd()) {
-  const p = paths(root);
-  const raw = JSON.parse(fs.readFileSync(p.state, 'utf8'));
-  const { state, changed } = migrateState(raw, root);
-  if (changed) writeState(state, root);
-  return state;
-}
-
-export function writeState(state, root = process.cwd()) {
-  state.schemaVersion = SCHEMA_VERSION;
-  atomicWriteJson(paths(root).state, state);
-}
-
-export function readConfig(root = process.cwd()) {
-  const p = paths(root);
-  if (!fs.existsSync(p.config)) atomicWriteJson(p.config, baseConfig());
-  return { ...baseConfig(), ...JSON.parse(fs.readFileSync(p.config, 'utf8')) };
-}
-
-export function writeConfig(config, root = process.cwd()) {
-  atomicWriteJson(paths(root).config, { ...baseConfig(), ...config });
-  appendEvent('CONFIG_UPDATED', {}, root);
-}
-
-export function appendEvent(type, payload = {}, root = process.cwd()) {
-  const event = { id: id('evt'), type, at: now(), payload };
-  fs.mkdirSync(paths(root).base, { recursive: true });
-  fs.appendFileSync(paths(root).events, `${JSON.stringify(event)}\n`);
-  return event;
-}
-
-export function readEvents(root = process.cwd(), limit = 200) {
-  const file = paths(root).events;
-  if (!fs.existsSync(file)) return [];
-  return fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean).slice(-limit).map((line) => JSON.parse(line));
-}
-
-export function addTasks(tasks, root = process.cwd()) {
-  const state = readState(root);
-  const existing = new Set(state.tasks.map((t) => t.id));
-  for (const task of tasks) {
-    if (existing.has(task.id)) throw new Error(`Duplicate task: ${task.id}`);
-    state.tasks.push(task);
-    existing.add(task.id);
-  }
-  validateDependencies(state.tasks);
-  for (const task of tasks) appendEvent('TASK_IMPORTED', { taskId: task.id, source: task.source }, root);
-  writeState(state, root);
-  return state;
-}
-
-export function upsertTasks(tasks, root = process.cwd()) {
-  const state = readState(root);
-  const byId = new Map(state.tasks.map((t, index) => [t.id, index]));
-  const events = [];
-  for (const task of tasks) {
-    const index = byId.get(task.id);
-    if (index === undefined) {
-      state.tasks.push(task);
-      byId.set(task.id, state.tasks.length - 1);
-      events.push(['TASK_IMPORTED', { taskId: task.id, source: task.source }]);
-    } else {
-      const current = state.tasks[index];
-      if (!['PENDING','READY','FAILED','BLOCKED','REJECTED'].includes(current.state)) throw new Error(`Cannot update active/completed task ${task.id}`);
-      state.tasks[index] = { ...task, state: current.state, createdAt: current.createdAt, updatedAt: now() };
-      events.push(['TASK_UPDATED', { taskId: task.id, source: task.source }]);
-    }
-  }
-  validateDependencies(state.tasks);
-  for (const [type, payload] of events) appendEvent(type, payload, root);
-  writeState(state, root);
-  return state;
-}
-
-export function validateDependencies(tasks) {
-  const ids = new Set(tasks.map((t) => t.id));
-  for (const task of tasks) {
-    for (const dep of task.dependsOn ?? []) if (!ids.has(dep)) throw new Error(`Task ${task.id} depends on unknown task ${dep}`);
-  }
-  const visiting = new Set();
-  const visited = new Set();
-  const byId = Object.fromEntries(tasks.map((t) => [t.id, t]));
-  function visit(idValue) {
-    if (visiting.has(idValue)) throw new Error(`Task dependency cycle detected at ${idValue}`);
-    if (visited.has(idValue)) return;
-    visiting.add(idValue);
-    for (const dep of byId[idValue]?.dependsOn ?? []) visit(dep);
-    visiting.delete(idValue);
-    visited.add(idValue);
-  }
-  for (const task of tasks) visit(task.id);
-}
-
-export function transition(taskId, to, meta = {}, root = process.cwd()) {
-  const state = readState(root);
-  const task = state.tasks.find((t) => t.id === taskId);
-  if (!task) throw new Error(`Unknown task: ${taskId}`);
-  assertTransition(task.state, to);
-  const from = task.state;
-  task.state = to;
-  task.updatedAt = now();
-  Object.assign(task, meta);
-  appendEvent('TASK_TRANSITION', { taskId, from, to, meta }, root);
-  writeState(state, root);
-  return task;
-}
-
-export function recoverTransition(taskId, to, reason, root = process.cwd()) {
-  const state = readState(root);
-  const task = state.tasks.find((t) => t.id === taskId);
-  if (!task) throw new Error(`Unknown task: ${taskId}`);
-  const from = task.state;
-  task.state = to;
-  task.updatedAt = now();
-  appendEvent('TASK_RECOVERED', { taskId, from, to, reason }, root);
-  writeState(state, root);
-  return task;
-}
-
-export function recordRun(run, root = process.cwd()) {
-  const state = readState(root);
-  state.runs.push(run);
-  appendEvent('RUN_RECORDED', { runId: run.id, taskId: run.taskId, status: run.status, agent: run.agent }, root);
-  writeState(state, root);
-  return run;
-}
-
-export function updateRun(runId, patch, root = process.cwd()) {
-  const state = readState(root);
-  const run = state.runs.find((r) => r.id === runId);
-  if (!run) throw new Error(`Unknown run: ${runId}`);
-  Object.assign(run, patch, { updatedAt: now() });
-  appendEvent('RUN_UPDATED', { runId, patch }, root);
-  writeState(state, root);
-  return run;
-}
-
-export function recordEvidence(items, root = process.cwd()) {
-  if (!items?.length) return [];
-  const state = readState(root);
-  state.evidence.push(...items);
-  for (const item of items) appendEvent('EVIDENCE_RECORDED', { evidenceId: item.id, taskId: item.taskId, type: item.type, status: item.status }, root);
-  writeState(state, root);
-  return items;
-}
-
-export function recordDecision(decision, root = process.cwd()) {
-  const state = readState(root);
-  state.decisions.push(decision);
-  appendEvent('DECISION_RECORDED', { decisionId: decision.id, taskId: decision.taskId, action: decision.action }, root);
-  writeState(state, root);
-  return decision;
-}
-
-export function taskById(taskId, root = process.cwd()) {
-  const task = readState(root).tasks.find((t) => t.id === taskId);
-  if (!task) throw new Error(`Unknown task: ${taskId}`);
-  return task;
+export function replayStateFromJournal(root=process.cwd()){
+ ensureJournalFormat(root);const p=paths(root);const lines=fs.readFileSync(p.events,'utf8').split(/\n/).filter(Boolean).map(JSON.parse);let state=null;for(const e of lines){const q=e.payload||{};if(e.type==='PROJECT_INITIALIZED'&&q.project)state={schemaVersion:CURRENT_SCHEMA,project:q.project,profile:q.profile||{},tasks:[],runs:[],evidence:[],decisions:[],metrics:{contexts:[],agentRuns:[]},locks:[],plans:[],remotes:[]};if(!state)continue;if(e.type==='TASK_IMPORTED'&&q.task&&!state.tasks.some(t=>t.id===q.task.id))state.tasks.push(q.task);else if(e.type==='TASK_TRANSITION'){const t=state.tasks.find(t=>t.id===q.taskId);if(t){t.state=q.to;Object.assign(t,q.meta||{});}}else if(e.type==='RUN_RECORDED'&&q.run){const i=state.runs.findIndex(r=>r.id===q.run.id);if(i>=0)state.runs[i]=q.run;else state.runs.push(q.run);}else if(e.type==='EVIDENCE_RECORDED'&&q.evidence)state.evidence.push(q.evidence);else if(e.type==='DECISION_RECORDED')state.decisions.push(q);else if(e.type==='PROFILE_REFRESHED')state.profile=q.profile||state.profile;else if(e.type==='DESIGN_LOCKS_UPDATED'&&q.locks)state.locks=q.locks;else if(e.type==='PLAN_CREATED'&&q.plan)state.plans.push(q.plan);else if(e.type==='PLAN_APPROVED'){const pl=state.plans.find(x=>x.id===q.planId);if(pl)pl.status='APPROVED';}else if(e.type==='METRIC_RECORDED'){state.metrics[q.kind]||=[];state.metrics[q.kind].push(q.item);}}if(!state)throw new Error('Journal does not contain replayable project initialization');writeState(state,root);appendEvent('STATE_REPLAYED',{eventCount:lines.length},root);return state;
 }

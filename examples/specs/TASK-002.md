@@ -1,25 +1,22 @@
-# Surface project health in the operator layer
-
-ID: TASK-002
-Priority: 80
+# Surface health in status
+Id: TASK-002
 Depends On: TASK-001
-Tags: example, ui
+Priority: 90
+Risk: medium
 
 ## Objective
-Consume the accepted project-health behavior in the operator layer.
+Expose the accepted health implementation through the project status surface.
 
 ## Acceptance Criteria
-- Operator status can report project health
-- Existing tests continue to pass
+- Status consumes the accepted health result.
 
 ## Verification
 - npm test
 
-## Files
-- src/status.js
-- web/app.js
-
 ## Allowed Paths
 - src/**
-- web/**
 - test/**
+
+## Evidence
+- test
+- diff

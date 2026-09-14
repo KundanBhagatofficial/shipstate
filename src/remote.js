@@ -1,0 +1,7 @@
+import { run } from './utils.js';
+const q=s=>`'${String(s).replaceAll("'","'\\''")}'`;
+export function sshAvailable(){return run('ssh',['-V']).status===0;}
+export function rsyncAvailable(){return run('rsync',['--version']).status===0;}
+export function remoteDoctor(host){const r=run('ssh',['-o','BatchMode=yes','-o','ConnectTimeout=5',host,'node --version && git --version']);return {host,available:r.status===0,rsync:rsyncAvailable(),output:(r.stdout||r.stderr||'').trim()};}
+export function remoteExec(host,command,{cwd}={}){const remote=cwd?`cd ${q(cwd)} && ${command}`:command;const r=run('ssh',[host,remote]);return {exitCode:r.status??1,stdout:r.stdout||'',stderr:r.stderr||''};}
+export function remoteVerify(host,worktree,commands){if(!sshAvailable())throw new Error('ssh executable not available');if(!rsyncAvailable())throw new Error('rsync is required for remote verification');const mk=run('ssh',[host,'mktemp -d /tmp/shipstate-verify-XXXXXX']);if(mk.status!==0)throw new Error(`remote temp failed: ${mk.stderr}`);const remoteDir=(mk.stdout||'').trim();try{const sync=run('rsync',['-az','--delete','--exclude','.git/',`${worktree.replace(/\/$/,'')}/`,`${host}:${remoteDir}/`]);if(sync.status!==0)throw new Error(`rsync failed: ${sync.stderr}`);const results=[];for(const command of commands){const r=remoteExec(host,command,{cwd:remoteDir});results.push({command,...r});}return {host,remoteDir,results};}finally{run('ssh',[host,`rm -rf ${q(remoteDir)}`]);}}
