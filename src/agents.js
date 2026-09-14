@@ -1,29 +1,10 @@
-import { spawnSync } from 'node:child_process';
-
-export function agentCommand(agent, contextPath) {
-  const instruction = `Implement the SHIPSTATE task exactly as specified in ${contextPath}. Read the complete context first. Work only in the current repository worktree. Do not modify .shipstate or .git. Do not stop at analysis; implement the code and tests.`;
-  if (agent === 'claude') return { cmd: 'claude', args: ['-p', instruction] };
-  if (agent === 'codex') return { cmd: 'codex', args: ['exec', instruction] };
-  if (agent === 'manual') return { cmd: process.execPath, args: ['-e', 'console.log("SHIPSTATE manual mode: edit the isolated worktree, then run shipstate verify")'] };
-  if (agent === 'dry-run') return { cmd: process.execPath, args: ['-e', 'console.log("SHIPSTATE dry-run: execution envelope validated; no code changes requested")'] };
-  throw new Error(`Unsupported agent: ${agent}`);
-}
-
-export function executeAgent(agent, contextPath, worktree, options = {}) {
-  const spec = agentCommand(agent, contextPath);
-  const spawn = options.spawn ?? spawnSync;
-  const result = spawn(spec.cmd, spec.args, {
-    cwd: worktree,
-    encoding: 'utf8',
-    shell: false,
-    timeout: options.timeoutMs ?? 30 * 60 * 1000,
-    env: { ...process.env, SHIPSTATE_TASK_CONTEXT: contextPath }
-  });
-  return {
-    exitCode: result.status ?? (result.error ? 1 : 0),
-    signal: result.signal ?? null,
-    stdout: result.stdout ?? '',
-    stderr: result.stderr ?? '',
-    error: result.error?.message ?? null
-  };
-}
+import { run } from './utils.js';
+export const ADAPTERS={
+ manual:{kind:'manual'},
+ 'dry-run':{kind:'command',command:()=>({cmd:process.execPath,args:['-e','console.log("SHIPSTATE dry-run")']})},
+ claude:{kind:'command',command:ctx=>({cmd:'claude',args:['-p',`Implement the task using the SHIPSTATE context at ${ctx}. Stay within allowed paths. Do not modify .shipstate or .git.`]})},
+ codex:{kind:'command',command:ctx=>({cmd:'codex',args:['exec',`Implement the task using the SHIPSTATE context at ${ctx}. Stay within allowed paths. Do not modify .shipstate or .git.`]})}
+};
+export function adapter(name){const a=ADAPTERS[name];if(!a)throw new Error(`Unsupported agent: ${name}`);return a;}
+export function executableInfo(name){if(name==='manual'||name==='dry-run')return {available:true,version:'builtin'};const cmd=name==='claude'?'claude':'codex';const r=run(cmd,['--version']);return {available:r.status===0,version:r.status===0?(r.stdout||r.stderr||'').trim():'not found'};}
+export function commandFor(name,ctx){const a=adapter(name);return a.kind==='manual'?null:a.command(ctx);}

@@ -1,67 +1,56 @@
-# SHIPSTATE Architecture
-
-## Product boundary
-
-SHIPSTATE is the execution-governance layer between product intent, a Git repository, and coding agents.
+# SHIPSTATE 1.0 Architecture
 
 ```text
-Task contract
-    |
-Context compiler
-    |
-Execution envelope
-    |
-Detached Git worktree
-    |
-Agent / human implementation
-    |
-Path policy
-    |
-Deterministic verifier
-    |
-Evidence + candidate commit
-    |
-Explicit acceptance
-    |
-Current branch
+Repository + product docs
+        |
+ Project Intelligence
+        |
+ proposed plan -> human approval
+        |
+ Task DAG + Design Locks
+        |
+ Context Engine 2
+        |
+ Execution Envelope
+        |
+ OS sandbox + detached Git worktree
+        |
+ Agent / human / remote worker
+        |
+ Path policy + Design Locks
+        |
+ Evidence Engine 2
+        |
+ Verified candidate commit
+        |
+ explicit / policy acceptance
+        |
+ integrated branch
 ```
 
-CodeAtlas may later provide richer semantic context to the context compiler. GameForge may later produce domain-specific task graphs. Neither is required by SHIPSTATE.
-
-## Modules
-
-- `core.js` — lifecycle and DAG eligibility
-- `store.js` — atomic materialized state + append-only events
-- `spec.js` — Markdown task contracts
-- `context.js` — bounded context compiler and lexical discovery
-- `git.js` — worktree, diff, candidate commit and acceptance transaction
-- `policy.js` — path boundary enforcement
-- `agents.js` — replaceable local executable adapters
-- `runner.js` — isolated execution orchestration
-- `verifier.js` — deterministic evidence production
-- `actions.js` — accept/reject/unblock decisions
-- `recovery.js` — crash-state reducer
-- `server.js` — loopback-only local API and dashboard server
-- `web/` — dependency-free operator UI
+## Project Intelligence
+`profile.js` detects Node, Python, Rust, Go, Java/Kotlin, Swift and Flutter/Dart repositories, package managers, frameworks, manifests, source/test directories, CI and commands.
 
 ## State
+`state.json` is the materialized projection. `state.prev.json` is the last-good snapshot. `events.jsonl` is a SHA-256 hash chain. Legacy journals are upgraded automatically with a backup. New-format journals contain sufficient task/run/evidence/decision/plan payloads for state replay.
 
-`.shipstate/state.json` is the current materialized projection. `.shipstate/events.jsonl` is the append-only mutation journal. The directory is local-only and ignored by Git.
+## Context Engine 2
+The engine builds a lightweight local index: files, symbols, imports, reverse imports, adjacent tests and Git history. It uses explicit task files first, then bounded lexical/dependency expansion. No embedding service is required.
 
-State writes use temp-file + rename replacement. Interrupted execution states are repaired by `shipstate recover`.
+## Runtime
+`runner.js` creates a detached worktree from an exact base. `sandbox.js` chooses the strongest locally available isolation. `runtime.js` streams output, records logs, enforces timeouts and supports cancellation/process-tree termination.
 
-## Git transaction model
+## Evidence
+Evidence is typed: `test`, `lint`, `typecheck`, `security`, `coverage`, `performance`, `browser`, `command`, `policy`, `diff`, `sandbox`. Task contracts can require evidence classes.
 
-Every run records the starting commit. Work is performed in a detached worktree created from exactly that commit. Verification happens in the same worktree. Successful verification creates a candidate commit. Acceptance checks that the main tree is clean and that its `HEAD` is still the original base before cherry-picking the candidate.
+## Scheduler
+Independent task batches are selected only when declared path scopes do not overlap. Parallel verified candidates are not auto-integrated after another candidate moves HEAD; the stale-base invariant wins over throughput.
 
-This prevents both main-tree pollution and silent application onto a repository that changed underneath the agent.
+## Product Owner
+`planner.js` converts document sections into proposed tasks. Proposals do not enter project truth until explicit `plan approve`.
 
-## Evidence model
-
-RC evidence types are intentionally small:
-
-- `command` — verification command, exit status and output hash
-- `policy` — changed-file path-policy result
-- `diff` — final Git diff hash, byte size and summary
-
-More evidence types can be added without changing lifecycle semantics.
+## External boundaries
+- GitHub: optional `gh` adapter.
+- CodeAtlas: optional context-provider contract stored under `.shipstate/integrations/`.
+- GameForge: optional task/workflow-provider contract stored under `.shipstate/integrations/`.
+- Remote runners: SSH capability layer; no hosted runner is required.

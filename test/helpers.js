@@ -1,28 +1,4 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { initStore } from '../src/store.js';
-
-export function git(args, cwd) {
-  const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
-  if (result.status !== 0) throw new Error(result.stderr || result.stdout);
-  return result.stdout.trim();
-}
-
-export function tempProject(name = 'shipstate-test') {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), `${name}-`));
-  fs.writeFileSync(path.join(root, '.gitignore'), '.shipstate/\n');
-  fs.writeFileSync(path.join(root, 'app.txt'), 'old\n');
-  fs.mkdirSync(path.join(root, 'src')); fs.writeFileSync(path.join(root, 'src', 'app.js'), 'export const value = "old";\n');
-  fs.mkdirSync(path.join(root, 'test')); fs.writeFileSync(path.join(root, 'test', 'app.test.js'), '// placeholder\n');
-  git(['init','-q'], root);
-  git(['config','user.name','SHIPSTATE Test'], root);
-  git(['config','user.email','shipstate@test.local'], root);
-  git(['add','-A'], root);
-  git(['commit','-qm','initial'], root);
-  initStore(root, { name: 'Test Project' });
-  return root;
-}
-
-export function cleanup(root) { fs.rmSync(root, { recursive: true, force: true }); }
+import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import { spawnSync } from 'node:child_process';
+export function sh(root,cmd,args=[]){const r=spawnSync(cmd,args,{cwd:root,encoding:'utf8'});if(r.status!==0)throw new Error(`${cmd} ${args.join(' ')}: ${r.stderr}`);return (r.stdout||'').trim();}
+export function tempRepo(name='shipstate-test'){const root=fs.mkdtempSync(path.join(os.tmpdir(),`${name}-`));sh(root,'git',['init','-b','main']);sh(root,'git',['config','user.name','Test']);sh(root,'git',['config','user.email','test@example.com']);fs.mkdirSync(path.join(root,'src'));fs.mkdirSync(path.join(root,'test'));fs.writeFileSync(path.join(root,'src','app.js'),'export const greeting = () => "hello";\n');fs.writeFileSync(path.join(root,'test','app.test.js'),'import test from "node:test"; import assert from "node:assert/strict"; import { greeting } from "../src/app.js"; test("greeting",()=>assert.equal(greeting(),"hello shipstate"));\n');fs.writeFileSync(path.join(root,'package.json'),JSON.stringify({name:'fixture',type:'module',scripts:{test:'node --test',lint:'node --check src/app.js'}},null,2));sh(root,'git',['add','.']);sh(root,'git',['commit','-m','initial']);return root;}
+export function writeTask(root,{id='TASK-001',dependsOn='',allowed='src/**, test/**',verification='npm test',risk='low'}={}){const dir=path.join(root,'specs');fs.mkdirSync(dir,{recursive:true});const file=path.join(dir,`${id}.md`);fs.writeFileSync(file,`# Change greeting\nId: ${id}\nDepends On: ${dependsOn}\nPriority: 100\nRisk: ${risk}\n\n## Objective\nChange greeting to hello shipstate.\n\n## Acceptance Criteria\n- greeting returns hello shipstate\n\n## Verification\n- ${verification}\n\n## Files\n- src/app.js\n- test/app.test.js\n\n## Allowed Paths\n${allowed.split(',').map(x=>`- ${x.trim()}`).join('\n')}\n\n## Evidence\n- test\n- diff\n`);return file;}

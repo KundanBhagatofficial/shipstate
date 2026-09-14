@@ -2,106 +2,83 @@
 
 **Local-first execution control plane for AI coding agents.**
 
-SHIPSTATE answers four questions continuously:
+SHIPSTATE sits between product intent, a Git repository, and implementation agents. It decides what is eligible, compiles bounded task context, executes work in isolation, verifies deterministic evidence, remembers failures, and integrates only explicitly accepted work.
 
-1. **What should happen next?**
-2. **What context does the agent actually need?**
-3. **Did the implementation satisfy deterministic evidence?**
-4. **Has the verified work actually been integrated into the repository?**
+## 1.0 RC capabilities
 
-It is not an IDE, another chat interface, CodeAtlas, or GameForge. SHIPSTATE governs execution.
-
-## What is included in 0.2 RC
-
-- dependency-aware task DAG
-- Markdown execution contracts
-- bounded task context compiler with lexical repository discovery
-- isolated Git worktree per agent run
-- `manual`, `dry-run`, Claude Code and Codex adapters
-- allowed/protected path policy
-- deterministic verification commands
-- evidence ledger with command/diff/policy evidence
-- verified candidate commits
-- explicit accept/reject before integration
-- stale-base protection before cherry-pick
-- repeated-failure loop guard
-- crash-state recovery
-- append-only event journal
-- local dashboard + local JSON API
-- CLI for every lifecycle operation
+- automatic repository profiling for Node/TS/JS, Python, Rust, Go, Java/Kotlin, Swift and Flutter/Dart
+- stack/framework/package-manager/test/lint/build detection
+- proposed product-doc → task-DAG planning with explicit approval
+- Design Locks and path-level architecture protection
+- import/symbol/reverse-import/test/Git-aware Context Engine 2
+- context/token analytics
+- detached Git worktree per run
+- strongest-available OS sandbox with explicit degradation reporting
+- timeout, cancellation, live logs and process-tree cleanup
+- typed Evidence Engine 2
+- candidate commits + explicit accept/reject
+- stale-base and dirty-main protection
+- parallel-safe DAG batch selection and autonomous execution loop
+- checksum event journal, versioned schema migration, last-good state and journal replay
+- optional GitHub PR/check adapter through the free `gh` CLI
+- global project registry and multi-repository workspace manifest
+- optional SSH remote diagnostics
+- CodeAtlas/GameForge integration contracts
+- productized local dashboard and JSON API
 - zero runtime npm dependencies
 
-## Cost model
+## No paid dependency
 
-SHIPSTATE itself needs **no subscription and no hosted service**. Node.js and Git are the only required runtime dependencies.
+SHIPSTATE requires only Node.js 20+ and Git. Manual mode exercises the complete governance lifecycle without Claude, Codex or any subscription. Claude/Codex/GitHub/SSH features are optional adapters around locally installed tools.
 
-`manual` mode lets you use any editor or locally available tool in the isolated worktree. `claude` and `codex` are optional executable adapters and are never required to use or test SHIPSTATE.
-
-## Requirements
-
-- Node.js 20+
-- Git
-- a repository with at least one commit
-
-## Install for development
+## Install
 
 ```bash
 git clone https://github.com/KundanBhagatofficial/shipstate.git
 cd shipstate
 npm link
+npm run certify
 shipstate doctor
 ```
 
-There are currently no package dependencies to download.
-
-## Start a project
-
-Run from the **root of the Git repository you want SHIPSTATE to govern**:
+## Start in any Git project
 
 ```bash
-shipstate init --name="My Product"
+cd /path/to/project
+shipstate init --name="My Project"
+shipstate profile
 ```
 
-`init` creates `.shipstate/` and ensures it is ignored by Git. Commit any `.gitignore` change before executing an agent because SHIPSTATE requires the main working tree to be clean.
+Commit the `.gitignore` change produced by initialization before running agents.
 
-Create task contracts:
-
-```bash
-shipstate template TASK-001 "Restore session before API boot" > specs/TASK-001.md
-```
-
-Then import them:
+Create/import a task:
 
 ```bash
+mkdir -p specs
+shipstate template TASK-001 "Implement session restore" > specs/TASK-001.md
+# edit acceptance criteria / policy
 shipstate import specs
-shipstate status
 shipstate next
 ```
 
-## Run without any AI subscription
+Run without an AI subscription:
 
 ```bash
 shipstate run TASK-001 --agent=manual
-```
-
-SHIPSTATE prints a run object containing `worktreePath`. Open that directory in your editor, make the implementation, then:
-
-```bash
+# edit the returned worktreePath
 shipstate verify TASK-001
 shipstate accept TASK-001
 ```
 
-Until `accept`, the real branch is untouched.
-
-## Run with a supported local agent executable
+Run a configured agent:
 
 ```bash
 shipstate run TASK-001 --agent=claude
 # or
 shipstate run TASK-001 --agent=codex
+shipstate verify TASK-001
+shipstate accept TASK-001
 ```
-
-The executable must already be installed and authenticated/configured independently. SHIPSTATE does not require or purchase any account.
 
 ## Dashboard
 
@@ -109,71 +86,104 @@ The executable must already be installed and authenticated/configured independen
 shipstate serve --open
 ```
 
-Default address: `http://127.0.0.1:4317`
+The UI exposes Now, Tasks, Runs, Evidence, Context/analytics and System views. It binds to `127.0.0.1` by default; mutations require a random per-server session token.
 
-The dashboard exposes:
+## Product intelligence
 
-- **Now** — next action, active work, release pulse, blockers
-- **Tasks** — complete task graph and states
-- **Runs** — agent attempt ledger
-- **Evidence** — verification and diff evidence
-- **System** — environment, imports, default agent and recovery
+`shipstate init` profiles the repository. `shipstate profile` refreshes it. Missing task verification/allowed-path policy can be derived from the profile, while explicit task policy takes precedence.
 
-Mutation endpoints require a random per-server session token and the server binds to loopback by default.
+## Product Owner / planning
 
-## Task lifecycle
-
-```text
-PENDING -> READY -> RUNNING -> IMPLEMENTED -> VERIFYING -> VERIFIED
-                                                          |
-                                                          v
-                                                     ACCEPTING
-                                                          |
-                                                          v
-                                                       ACCEPTED
+```bash
+shipstate plan PRODUCT.md TECH_SPEC.md
+shipstate plan approve <PLAN-ID>
 ```
 
-Failure paths lead to `FAILED`, `BLOCKED`, or `REJECTED`.
+Document-derived work stays `PROPOSED` until approved. SHIPSTATE never silently converts prose into authoritative project truth.
 
-**Important:** a dependent task is eligible only when every dependency is `ACCEPTED`, not merely `VERIFIED`. This guarantees the dependent agent executes against repository state that actually contains its prerequisites.
+## Design Locks
 
-## Certification
+```markdown
+- [security] LOCK-AUTH: paths=src/auth/** :: Authentication must remain server verified.
+- [immutable] LOCK-DATA: PostgreSQL remains authoritative persistence.
+```
+
+```bash
+shipstate locks import DESIGN_LOCKS.md
+```
+
+## Autopilot
+
+```bash
+shipstate autopilot --agent=claude --max=5 --attempts=2
+```
+
+Low-risk tasks may be policy-auto-accepted if configured. Parallel mode selects non-overlapping path scopes:
+
+```bash
+shipstate autopilot --agent=codex --parallel=3 --no-auto-accept
+```
+
+Parallel verified candidates are intentionally not silently integrated after another candidate moves `HEAD`; stale-base safety wins over throughput.
+
+## GitHub workflow
+
+With the free `gh` CLI installed/authenticated:
+
+```bash
+shipstate github status
+shipstate github pr-create --title="Verified SHIPSTATE candidate" --head=my-branch
+shipstate github pr-view 123
+shipstate github pr-checks 123
+```
+
+## Project launcher / workspaces
+
+Every initialized project is registered locally:
+
+```bash
+shipstate projects
+```
+
+A product spanning multiple repositories can create a workspace:
+
+```bash
+mkdir my-product-control && cd my-product-control
+shipstate workspace init --name="My Product"
+shipstate workspace add ../frontend --alias=web
+shipstate workspace add ../backend --alias=api
+shipstate workspace status
+```
+
+## Real-agent certification
+
+CI cannot safely contain your Claude/Codex credentials. Certify real installed agents locally:
+
+```bash
+shipstate certify-agent claude
+shipstate certify-agent codex
+```
+
+Each command creates a disposable repository and proves real adapter → context → isolated execution → deterministic verification → acceptance.
+
+## Release certification
 
 ```bash
 npm run certify
 ```
 
-Certification performs JavaScript syntax checks, the complete automated test suite, and a clean-repository end-to-end smoke test:
-
-```text
-fresh Git repo
- -> task import
- -> isolated manual worktree
- -> implementation change
- -> deterministic verification
- -> evidence + candidate commit
- -> main tree still unchanged
- -> explicit acceptance
- -> candidate integrated
-```
-
-See [docs/TESTING.md](docs/TESTING.md) for the manual release checklist.
+GitHub CI runs the same gate on Ubuntu, macOS and Windows under Node 20 and 22.
 
 ## Core invariants
 
-- An agent cannot mark work `VERIFIED` or `ACCEPTED`.
-- Verification must produce evidence.
-- Agent work never executes directly in the main working tree.
-- `.git`, `.shipstate`, and `.env*` are protected by default.
-- Path-policy violations block a task.
-- Acceptance refuses to apply a candidate if repository `HEAD` moved after execution began.
-- Three identical failure fingerprints block further automatic retries.
-- Every state mutation is journaled.
-- No cloud service is required by the kernel.
+1. Agent output never directly creates `VERIFIED` or `ACCEPTED`.
+2. Real work never executes in the user's main working tree.
+3. Dependencies require integrated (`ACCEPTED`) prerequisites.
+4. Verification emits persisted typed evidence.
+5. Reduced sandbox capability is visible and never misrepresented.
+6. `.git`, `.shipstate` and `.env*` remain protected.
+7. Stale candidates cannot be silently accepted.
+8. State mutations are checksum-journaled.
+9. No paid/cloud service is required by the kernel.
 
-## Documentation
-
-- [Architecture](docs/ARCHITECTURE.md)
-- [Task contracts](docs/TASK_CONTRACTS.md)
-- [Testing / release certification](docs/TESTING.md)
-- [Security model](SECURITY.md)
+See `docs/ARCHITECTURE.md`, `docs/TASK_CONTRACTS.md`, `docs/TESTING.md` and `SECURITY.md`.

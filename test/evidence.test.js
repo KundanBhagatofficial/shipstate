@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import { classifyCommand,parseCoverage,evidenceSatisfies } from '../src/evidence.js';
+test('evidence classifies commands and coverage',()=>{assert.equal(classifyCommand('npm test').type,'test');assert.equal(classifyCommand('npm audit').type,'security');assert.equal(parseCoverage('Lines 91.2%'),91.2);assert.deepEqual(evidenceSatisfies({evidenceRequired:['test']},[{type:'test',status:'passed'}]),{passed:true,missing:[]});});

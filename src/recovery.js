@@ -1,33 +1,3 @@
-import fs from 'node:fs';
-import { now } from './core.js';
-import { removeWorktree } from './git.js';
-import { readState, recoverTransition, updateRun } from './store.js';
-
-export function recover(root = process.cwd(), options = {}) {
-  const state = readState(root);
-  const actions = [];
-  for (const task of state.tasks) {
-    if (task.state === 'RUNNING') {
-      recoverTransition(task.id, 'FAILED', 'interrupted_agent_run', root);
-      actions.push({ taskId: task.id, from: 'RUNNING', to: 'FAILED' });
-    } else if (task.state === 'VERIFYING') {
-      recoverTransition(task.id, 'IMPLEMENTED', 'interrupted_verification', root);
-      actions.push({ taskId: task.id, from: 'VERIFYING', to: 'IMPLEMENTED' });
-    } else if (task.state === 'ACCEPTING') {
-      recoverTransition(task.id, 'VERIFIED', 'interrupted_acceptance', root);
-      actions.push({ taskId: task.id, from: 'ACCEPTING', to: 'VERIFIED' });
-    }
-  }
-  if (options.prune) {
-    const refreshed = readState(root);
-    const activePaths = new Set(refreshed.runs.filter((run) => !run.acceptedAt && !run.rejectedAt).map((run) => run.worktreePath).filter(Boolean));
-    for (const run of refreshed.runs) {
-      if (!run.worktreePath || activePaths.has(run.worktreePath)) continue;
-      if (fs.existsSync(run.worktreePath)) {
-        removeWorktree(run.worktreePath, root);
-        updateRun(run.id, { recoveredCleanupAt: now() }, root);
-      }
-    }
-  }
-  return actions;
-}
+import fs from 'node:fs';import { readState,writeState,appendEvent } from './store.js';import { removeWorktree } from './git.js';
+export function recover(root=process.cwd()){const s=readState(root);const fixed=[];for(const t of s.tasks){if(t.state==='RUNNING'){t.state='READY';fixed.push([t.id,'RUNNING','READY']);}else if(t.state==='VERIFYING'){t.state='IMPLEMENTED';fixed.push([t.id,'VERIFYING','IMPLEMENTED']);}else if(t.state==='ACCEPTING'){t.state='VERIFIED';fixed.push([t.id,'ACCEPTING','VERIFIED']);}}
+ for(const [id,from,to] of fixed)appendEvent('TASK_RECOVERED',{taskId:id,from,to},root);writeState(s,root);return {recovered:fixed};}

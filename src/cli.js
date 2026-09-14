@@ -1,90 +1,38 @@
 #!/usr/bin/env node
-import fs from 'node:fs';
-import path from 'node:path';
-import { spawn } from 'node:child_process';
-import { acceptTask, rejectTask, unblockTask } from './actions.js';
-import { compileContext } from './context.js';
-import { chooseNext } from './core.js';
-import { doctor } from './doctor.js';
-import { recover } from './recovery.js';
-import { runTask } from './runner.js';
-import { startServer } from './server.js';
-import { loadTaskFiles, taskTemplate } from './spec.js';
-import { projectStatus } from './status.js';
-import { addTasks, initStore, initialized, paths, readConfig, readState, upsertTasks } from './store.js';
-import { verifyTask } from './verifier.js';
-
-const argv = process.argv.slice(2);
-const cmd = argv[0];
-const args = argv.slice(1);
-
-function flag(name, fallback = null) {
-  const prefixed = args.find((arg) => arg.startsWith(`--${name}=`));
-  if (prefixed) return prefixed.slice(name.length + 3);
-  return args.includes(`--${name}`) ? true : fallback;
+import fs from 'node:fs';import path from 'node:path';import { spawn } from 'node:child_process';
+import { initStore,initialized,readState,addTasks,refreshProfile,verifyJournal,backupState,replayStateFromJournal } from './store.js';
+import { loadTaskFiles,taskTemplate } from './spec.js';import { chooseNext } from './core.js';import { compileContext } from './context.js';import { runTask,cancelRun } from './runner.js';import { verifyTask } from './verifier.js';import { acceptTask,rejectTask,unblockTask } from './actions.js';import { doctor } from './doctor.js';import { recover } from './recovery.js';import { projectStatus } from './status.js';import { createServer } from './server.js';import { analytics } from './analytics.js';import { initWorkspace,addRepository,workspaceStatus } from './workspace.js';import { autopilot } from './scheduler.js';import { importLocks } from './design-lock.js';import { planFromDocuments,approvePlan } from './planner.js';import { githubStatus,createPullRequest,prView,prChecks } from './github.js';import { listProjects,registerProject } from './projects.js';import { remoteDoctor } from './remote.js';import { certifyAgent } from './certify-agent.js';import { writeIntegration,callIntegration } from './integrations.js';
+const argv=process.argv.slice(2),cmd=argv.shift();const flag=n=>argv.find(x=>x.startsWith(`--${n}=`))?.split('=').slice(1).join('=');const has=n=>argv.includes(`--${n}`);function need(){if(!initialized())throw new Error('Not initialized. Run: shipstate init');}const json=x=>console.log(JSON.stringify(x,null,2));
+function openBrowser(url){const [c,a]=process.platform==='darwin'?['open',[url]]:process.platform==='win32'?['cmd',['/c','start','',url]]:['xdg-open',[url]];spawn(c,a,{detached:true,stdio:'ignore'}).unref();}
+async function main(){
+ if(cmd==='init'){const s=initStore(process.cwd(),flag('name'));registerProject(process.cwd(),s.project.name);json({project:s.project,profile:s.profile});return;}
+ if(cmd==='profile'){need();json(refreshProfile());return;}
+ if(cmd==='template'){console.log(taskTemplate(argv[0]||'TASK-001',argv.slice(1).join(' ')||'New task'));return;}
+ if(cmd==='import'){need();const target=argv[0];if(!target)throw new Error('Usage: shipstate import <file|directory>');json({imported:addTasks(loadTaskFiles(path.resolve(target))).tasks.length});return;}
+ if(cmd==='status'){need();json(projectStatus());return;}
+ if(cmd==='next'){need();json(chooseNext(readState().tasks));return;}
+ if(cmd==='context'){need();json(compileContext(argv[0],process.cwd(),{budgetTokens:Number(flag('tokens')||0)||undefined}));return;}
+ if(cmd==='run'){need();json(await runTask(argv[0],flag('agent')||readState().project.defaultAgent||'manual',process.cwd(),{timeoutMs:Number(flag('timeout')||0)||undefined}));return;}
+ if(cmd==='cancel'){need();json({cancelled:cancelRun(argv[0])});return;}
+ if(cmd==='verify'){need();json(verifyTask(argv[0],process.cwd(),{remoteHost:flag('remote')}));return;}
+ if(cmd==='accept'){need();json(acceptTask(argv[0]));return;}
+ if(cmd==='reject'){need();json(rejectTask(argv[0],flag('reason')||'rejected'));return;}
+ if(cmd==='unblock'){need();json(unblockTask(argv[0]));return;}
+ if(cmd==='recover'){need();json(recover());return;}
+ if(cmd==='history'){need();const id=argv[0],s=readState();json({runs:s.runs.filter(r=>r.taskId===id),evidence:s.evidence.filter(e=>e.taskId===id),decisions:s.decisions.filter(d=>d.taskId===id)});return;}
+ if(cmd==='autopilot'){need();json(await autopilot({agent:flag('agent'),maxTasks:Number(flag('max')||10),parallel:Number(flag('parallel')||1),maxAttempts:Number(flag('attempts')||2),autoAccept:!has('no-auto-accept')}));return;}
+ if(cmd==='locks'){need();if(argv[0]==='import')json(importLocks(argv[1]));else json(readState().locks);return;}
+ if(cmd==='plan'){need();if(argv[0]==='approve')json(approvePlan(argv[1]));else json(planFromDocuments(argv));return;}
+ if(cmd==='github'){need();if(argv[0]==='status')json(githubStatus());else if(argv[0]==='pr-create')json(createPullRequest({title:flag('title')||'SHIPSTATE candidate',body:flag('body')||'',base:flag('base'),head:flag('head'),draft:has('draft')}));else if(argv[0]==='pr-view')json(prView(argv[1]));else if(argv[0]==='pr-checks')console.log(prChecks(argv[1]));else throw new Error('github status|pr-create|pr-view|pr-checks');return;}
+ if(cmd==='analytics'){need();json(analytics());return;}
+ if(cmd==='projects'){json(listProjects());return;}
+ if(cmd==='workspace'){if(argv[0]==='init')json(initWorkspace(flag('name')));else if(argv[0]==='add')json(addRepository(argv[1],flag('alias')));else if(argv[0]==='status')json(workspaceStatus());else throw new Error('workspace init|add|status');return;}
+ if(cmd==='remote'){if(argv[0]==='doctor')json(remoteDoctor(argv[1]));else throw new Error('remote doctor <host>');return;}
+ if(cmd==='integration'){need();if(argv[0]==='invoke')json(callIntegration(argv[1],argv[2]||'test',argv[3]?JSON.parse(fs.readFileSync(argv[3],'utf8')):{},process.cwd()));else json({path:writeIntegration(argv[0],JSON.parse(fs.readFileSync(argv[1],'utf8')))});return;}
+ if(cmd==='state'){need();if(argv[0]==='verify')json(verifyJournal());else if(argv[0]==='backup')json({path:backupState()});else if(argv[0]==='replay')json(replayStateFromJournal());else throw new Error('state verify|backup|replay');return;}
+ if(cmd==='certify-agent'){json(await certifyAgent(argv[0]));return;}
+ if(cmd==='doctor'){for(const x of doctor())console.log(`${x.available?'✓':'○'} ${x.name.padEnd(10)} ${x.version||''}`);return;}
+ if(cmd==='serve'){need();const port=Number(flag('port')||4317),host=flag('host')||'127.0.0.1';const app=createServer({root:process.cwd(),host,port});const info=await app.listen();const url=`${info.url}/#token=${info.token}`;console.log(`SHIPSTATE ${info.url}\nMutation token: ${info.token}`);if(has('open'))openBrowser(url);return;}
+ console.log(`SHIPSTATE 1.0 RC\n\nCommands:\n  init [--name=]\n  profile\n  template <ID> <title>\n  import <file|dir>\n  status | next | context <TASK>\n  run <TASK> [--agent=manual|dry-run|claude|codex] [--timeout=ms]\n  cancel <RUN> | verify <TASK> [--remote=user@host] | accept <TASK> | reject <TASK> | unblock <TASK>\n  history <TASK> | recover\n  autopilot [--agent=] [--max=] [--parallel=]\n  locks import <file>\n  plan <docs...> | plan approve <PLAN>\n  github status|pr-create|pr-view|pr-checks\n  projects | analytics\n  workspace init|add|status\n  remote doctor <host>\n  integration <codeAtlas|gameForge> <json> | integration invoke <name> <event> [payload.json]\n  state verify|backup|replay\n  certify-agent <claude|codex>\n  doctor\n  serve [--open] [--port=4317]`);
 }
-function positional(index = 0) { return args.filter((arg) => !arg.startsWith('--'))[index]; }
-function needInit() { if (!initialized()) throw new Error('Not initialized. Run: shipstate init'); }
-function task(id) { needInit(); const value = readState().tasks.find((item) => item.id === id); if (!value) throw new Error(`Unknown task: ${id}`); return value; }
-function ensureIgnored(root = process.cwd()) {
-  const file = path.join(root, '.gitignore');
-  const content = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
-  if (!content.split(/\r?\n/).some((line) => line.trim() === '.shipstate/' || line.trim() === '.shipstate')) fs.appendFileSync(file, `${content && !content.endsWith('\n') ? '\n' : ''}.shipstate/\n`);
-}
-function json(value) { console.log(JSON.stringify(value, null, 2)); }
-function printStatus(status = projectStatus()) {
-  console.log(`\nSHIPSTATE — ${status.project.name}`);
-  console.log(`${String(status.readiness).padStart(3)}% release readiness`);
-  console.log('─'.repeat(44));
-  for (const [state, count] of Object.entries(status.counts)) if (count) console.log(`${state.padEnd(14)} ${count}`);
-  console.log('─'.repeat(44));
-  console.log(`Next: ${status.next ? `${status.next.id} — ${status.next.title}` : 'none'}`);
-  if (status.blockers.length) console.log(`Blocked: ${status.blockers.map((item) => item.id).join(', ')}`);
-  if (status.git.repository) console.log(`Git: ${status.git.branch || 'detached'} @ ${status.git.head.slice(0,7)} · ${status.git.clean ? 'clean' : 'dirty'}`);
-  console.log('');
-}
-function openBrowser(url) {
-  const command = process.platform === 'darwin' ? ['open', [url]] : process.platform === 'win32' ? ['cmd', ['/c','start','',url]] : ['xdg-open', [url]];
-  const child = spawn(command[0], command[1], { detached: true, stdio: 'ignore' });
-  child.on('error', () => {}); child.unref();
-}
-
-async function main() {
-  if (cmd === 'init') {
-    const state = initStore(process.cwd(), { name: flag('name') || undefined });
-    ensureIgnored();
-    console.log(`Initialized ${state.project.name} in ${paths().base}`);
-    return;
-  }
-  if (cmd === 'template') { console.log(taskTemplate(positional(0) || 'TASK-001', positional(1) || 'Describe the task')); return; }
-  if (cmd === 'doctor') { for (const item of doctor()) console.log(`${item.available ? '✓' : item.required ? '✗' : '○'} ${item.name.padEnd(12)} ${item.version ?? 'not found'}${item.required ? ' [required]' : ' [optional]'}`); return; }
-  needInit();
-  if (cmd === 'import') {
-    const target = positional(0); if (!target) throw new Error('Usage: shipstate import <file-or-directory> [--upsert]');
-    const tasks = loadTaskFiles(path.resolve(target));
-    flag('upsert') ? upsertTasks(tasks) : addTasks(tasks);
-    console.log(`Imported ${tasks.length} task(s)`); return;
-  }
-  if (cmd === 'status') { flag('json') ? json(projectStatus()) : printStatus(); return; }
-  if (cmd === 'next') { const next = chooseNext(readState().tasks); next ? json(next) : console.log('No eligible task.'); return; }
-  if (cmd === 'context') { const value = task(positional(0)); json(compileContext(value.id)); return; }
-  if (cmd === 'run') { const value = task(positional(0)); json(runTask(value.id, flag('agent', readConfig().defaultAgent))); return; }
-  if (cmd === 'verify') { const value = task(positional(0)); json(verifyTask(value.id)); return; }
-  if (cmd === 'accept') { const value = task(positional(0)); json(acceptTask(value.id)); return; }
-  if (cmd === 'reject') { const value = task(positional(0)); json(rejectTask(value.id, flag('reason', 'rejected_from_cli'))); return; }
-  if (cmd === 'unblock') { const value = task(positional(0)); json(unblockTask(value.id)); return; }
-  if (cmd === 'history') { const value = task(positional(0)); const state = readState(); json({ runs: state.runs.filter((run) => run.taskId === value.id), evidence: state.evidence.filter((item) => item.taskId === value.id), decisions: state.decisions.filter((item) => item.taskId === value.id) }); return; }
-  if (cmd === 'recover') { json(recover(process.cwd(), { prune: Boolean(flag('prune')) })); return; }
-  if (cmd === 'serve') {
-    const requestedPort = Number(flag('port', readConfig().server.port));
-    const started = await startServer(process.cwd(), { port: requestedPort });
-    console.log(`SHIPSTATE dashboard: ${started.url}`);
-    console.log('Press Ctrl+C to stop.');
-    if (flag('open')) openBrowser(started.url);
-    return;
-  }
-  if (cmd === 'demo') { printStatus(); return; }
-  console.log(`SHIPSTATE 0.2 RC\n\nCommands:\n  init [--name=NAME]\n  template [TASK-ID] [TITLE]\n  import <file|dir> [--upsert]\n  status [--json]\n  next\n  context <TASK>\n  run <TASK> [--agent=manual|dry-run|claude|codex]\n  verify <TASK>\n  accept <TASK>\n  reject <TASK> [--reason=TEXT]\n  unblock <TASK>\n  history <TASK>\n  recover [--prune]\n  doctor\n  serve [--port=4317] [--open]\n  demo`);
-}
-
-main().catch((error) => { console.error(`shipstate: ${error.message}`); process.exitCode = 1; });
+main().catch(e=>{console.error(`shipstate: ${e.message}`);process.exitCode=1;});

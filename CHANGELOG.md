@@ -1,20 +1,18 @@
 # Changelog
 
+## 1.0.0-rc.1
+- automatic project stack/framework/test/build profiling
+- schema version 3, atomic last-good state, checksum event chain, legacy journal upgrade, replayable event recovery
+- OS-aware execution sandbox and resource/timeout/cancel controls
+- import/symbol/reverse-import/test/Git-aware Context Engine 2 with token metrics
+- typed Evidence Engine 2
+- parallel-safe task batch selection and autonomous execution loop
+- Design Locks and product-document planning with explicit approval
+- GitHub PR/check adapter via free `gh` CLI
+- project registry, workspace support, SSH remote diagnostics, CodeAtlas/GameForge adapter contracts
+- productized local dashboard with context/system/analytics surfaces
+- real Claude/Codex certification harness
+- Linux/macOS/Windows × Node 20/22 CI certification matrix
+
 ## 0.2.0-rc.1
-
-- added isolated Git worktree execution
-- added manual no-subscription execution mode
-- added allowed/protected path policy
-- added deterministic evidence verification
-- added verified candidate commits and explicit acceptance
-- added stale-base protection
-- changed dependency eligibility from VERIFIED to ACCEPTED
-- added reject/unblock decisions
-- added crash-state recovery
-- expanded context compiler with repository discovery and budgets
-- added loopback local dashboard and session-token API
-- added release certification and end-to-end smoke test
-
-## 0.1.0-alpha.1
-
-- initial task DAG, state journal, context packages and Claude/Codex adapters
+- isolated worktree execution, verification, explicit acceptance, loop guard, recovery, dashboard
