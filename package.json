@@ -1,7 +1,7 @@
 {
   "name": "shipstate",
-  "version": "1.0.0-rc.1",
-  "description": "Local-first execution control plane for AI coding agents",
+  "version": "1.1.0-rc.1",
+  "description": "Local-first autonomous software delivery control plane for AI engineering teams",
   "type": "module",
   "bin": {"shipstate": "./src/cli.js"},
   "scripts": {
