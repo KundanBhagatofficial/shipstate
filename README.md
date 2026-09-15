@@ -2,179 +2,206 @@
 
 **Local-first autonomous software delivery control plane for AI engineering teams.**
 
-SHIPSTATE lets a project owner finish the product decisions first, then hand the repository to an AI engineering team for autonomous implementation, review, verification and delivery.
+SHIPSTATE is designed for the point where the important project decisions are already made. The owner provides a complete project contract, hands the repository to the AI team, and monitors delivery instead of repeatedly writing implementation prompts.
 
-Default team:
+Default organization:
 
-- **Human** — Product Owner
+- **Human** — Product Owner / Client
 - **Codex** — Project Manager + Senior Reviewer
 - **Claude** — Developer
-- **SHIPSTATE** — deterministic execution governor, evidence authority and lifecycle controller
-
-The owner should manage the project, not continuously author implementation prompts.
+- **SHIPSTATE** — deterministic governor, verifier, evidence ledger and delivery controller
 
 ## Owner workflow
 
 ```text
-Create repository
-    ↓
+Create repository + project documents
+        ↓
 shipstate init
-    ↓
-Complete mandatory project pack
-    ↓
-Resolve mandatory project decisions
-    ↓
-Commit the project contract
-    ↓
+        ↓
+complete mandatory project pack + decisions
+        ↓
+commit project contract
+        ↓
 shipstate handover audit
-    ↓
+        ↓
 shipstate handover accept
-    ↓
-shipstate start
-    ↓
-Monitor dashboard
-    ↓
-Intervene only at explicit owner decision gates
-    ↓
-Certified delivery / deployment
+        ↓
+shipstate start   OR   Start AI Team in the web UI
+        ↓
+monitor Delivery / Decisions
+        ↓
+intervene only at explicit owner gates
+        ↓
+certified delivery / authorized deployment
 ```
 
-Start the dashboard at any time:
+The low-level task CLI remains available for debugging and manual operation, but it is no longer the primary owner workflow.
+
+## Install
+
+Requirements: Node.js 20+, Git, and—when using the default autonomous team—authenticated local Codex and Claude CLIs.
+
+```bash
+git clone https://github.com/KundanBhagatofficial/shipstate.git
+cd shipstate
+npm link
+npm run certify
+shipstate doctor
+```
+
+## Initialize a project
+
+Run inside the Git repository to be built:
+
+```bash
+shipstate init --name="My Product"
+```
+
+SHIPSTATE profiles the repository and creates `shipstate.project.json` plus a uniform project pack under `docs/shipstate/`.
+
+### Mandatory project documents
+
+Every autonomous project uses the same twelve contracts:
+
+1. `PRODUCT.md` — problem, target users, goals, non-goals, scope
+2. `FEATURES.md` — approved feature inventory, priorities, dependencies, deferred scope
+3. `UX.md` — user flows, screens/surfaces, visual direction, accessibility
+4. `FRONTEND.md` — frontend architecture, design system, responsive/platform rules, constraints
+5. `ARCHITECTURE.md` — system boundary, components, interfaces, architecture constraints
+6. `DATA.md` — model, persistence, migrations, retention/privacy
+7. `SECURITY.md` — identity/access, secrets, threat boundaries, security gates
+8. `DEVELOPMENT.md` — repository structure, coding conventions, dependencies/integrations, development workflow
+9. `TESTING.md` — test layers, quality thresholds, certification evidence
+10. `DEPLOYMENT.md` — environments, target, release procedure, rollback
+11. `ACCEPTANCE.md` — delivery criteria, required evidence, accepted-limitations policy
+12. `DECISIONS.md` — material approved product/design/technical/cost/deployment decisions
+
+Templates deliberately contain `SHIPSTATE:TODO`. Handover cannot pass until every required document is substantive and every TODO marker is removed.
+
+### Mandatory owner decisions
+
+`shipstate.project.json` also requires explicit decisions for:
+
+- product scope
+- target users/use cases
+- feature scope/priorities
+- UX/design direction (or explicit N/A)
+- frontend implementation architecture (or explicit N/A)
+- system architecture
+- data/persistence strategy (or explicit N/A)
+- security model
+- development strategy/conventions
+- testing/certification strategy
+- deployment target/rollback strategy (or explicit N/A)
+- project acceptance criteria
+- decision ledger completeness
+- paid-service/dependency/cost policy
+- AI-team authority
+- deployment authority
+- release/handover authority
+
+Approve from the Handover screen, edit the JSON contract, or use:
+
+```bash
+shipstate handover decision product_scope approved --note="scope frozen"
+shipstate handover decision frontend_implementation not_applicable --note="headless service"
+```
+
+Then commit the control files:
+
+```bash
+git add docs/shipstate shipstate.project.json .gitignore
+git commit -m "docs: approve project handover contract"
+```
+
+## Handover gate
+
+```bash
+shipstate handover audit
+```
+
+Development is blocked if any required document/decision is incomplete, automatic deployment lacks deploy/smoke commands, or the governed Git tree is dirty.
+
+When the audit reports `ready: true`:
+
+```bash
+shipstate handover accept
+```
+
+SHIPSTATE hashes the approved contract and protects `shipstate.project.json` plus `docs/shipstate/**`. Editing project truth afterwards invalidates the handover and requires audit + acceptance again.
+
+## Start autonomous delivery
+
+CLI:
+
+```bash
+shipstate start
+```
+
+Web UI:
 
 ```bash
 shipstate serve --open
 ```
 
-Default address: `http://127.0.0.1:4317`.
+Open **Delivery** and click **Start AI Team**.
 
-## Mandatory project pack
-
-`shipstate init` creates a canonical committed project pack under `docs/shipstate/` plus `shipstate.project.json`.
-
-Every project uses the same documents:
-
-- `docs/shipstate/PRODUCT.md` — problem, target users, goals, non-goals, product scope
-- `docs/shipstate/FEATURES.md` — approved feature inventory, priorities, dependencies, deferred scope
-- `docs/shipstate/UX.md` — user flows, screens, states, design system, accessibility
-- `docs/shipstate/ARCHITECTURE.md` — system boundary, components, interfaces and architecture constraints
-- `docs/shipstate/DATA.md` — model, persistence, migrations, retention and privacy
-- `docs/shipstate/SECURITY.md` — identity, access, secrets, trust boundaries and security gates
-- `docs/shipstate/TESTING.md` — required test layers, thresholds and certification evidence
-- `docs/shipstate/DEPLOYMENT.md` — environments, target, release procedure and rollback
-- `docs/shipstate/ACCEPTANCE.md` — project completion and delivery contract
-- `docs/shipstate/DECISIONS.md` — material product/technical decision ledger
-- `shipstate.project.json` — machine-readable AI roles, authority, limits, deployment commands and mandatory decision approvals
-
-SHIPSTATE refuses project handover while a mandatory document contains `SHIPSTATE:TODO`, has insufficient substantive content, a mandatory owner decision remains pending, or the project contract is uncommitted.
-
-## Mandatory owner decisions
-
-Before autonomous development starts, the owner must explicitly decide/approve:
-
-- product scope
-- target users/use cases
-- feature scope and priorities
-- UX/design direction, or explicit N/A
-- system architecture
-- data model/persistence, or explicit N/A
-- security model
-- testing strategy
-- deployment target, or explicit N/A
-- acceptance criteria
-- decision ledger
-- cost/paid-service policy
-- AI authority
-- deployment authority
-- release authority
-
-Use the Handover page in the web UI, edit `shipstate.project.json`, or use CLI:
-
-```bash
-shipstate handover decision product_scope approved --note="scope frozen"
-shipstate handover decision ux_design not_applicable --note="headless library"
-```
-
-Then commit the documents and contract.
-
-## Handover
-
-Audit:
-
-```bash
-shipstate handover audit
-```
-
-When every deterministic gate is green:
-
-```bash
-shipstate handover accept
-```
-
-SHIPSTATE hashes the approved project contract and protects `shipstate.project.json` plus `docs/shipstate/**` from implementation agents. Changing them after handover invalidates the handover and requires re-approval.
-
-## Autonomous development
-
-Start:
-
-```bash
-shipstate start
-```
-
-The delivery controller performs:
+The controller executes:
 
 ```text
 Codex handover preflight
-        ↓
-Codex implementation roadmap
-        ↓
-Codex selects / briefs next bounded task
-        ↓
-Claude implements in isolated Git worktree
-        ↓
+    ↓
+Codex roadmap / task DAG
+    ↓
+Codex bounded task brief
+    ↓
+Claude implementation in isolated Git worktree
+    ↓
 SHIPSTATE deterministic verification
-        ↓
-Codex senior code/product review
-        ↓
-APPROVE ───────→ SHIPSTATE integrates candidate
-REPAIR  ───────→ Claude repair loop
-REPLAN  ───────→ Codex roadmap adjustment
-OWNER DECISION → only affected path pauses
-        ↓
+    ↓
+Codex senior review
+    ├─ APPROVE → SHIPSTATE integrates
+    ├─ REPAIR  → Claude repair
+    ├─ REPLAN  → Codex adjusts roadmap
+    └─ OWNER_DECISION_REQUIRED → owner gate
+    ↓
 next task
-        ↓
+    ↓
 Codex completion review
-        ↓
+    ↓
 SHIPSTATE project certification
-        ↓
-optional authorized deployment + production smoke
-        ↓
+    ↓
+authorized deployment + production smoke + optional rollback
+    ↓
 DELIVERED
 ```
 
-Codex and Claude cannot directly create `VERIFIED`, `ACCEPTED`, or `DELIVERED`. Those remain SHIPSTATE-owned states backed by deterministic evidence.
+Neither AI agent can directly mark a task VERIFIED/ACCEPTED or a project DELIVERED.
 
-Pause/resume:
+## Owner decision gates
+
+Normal implementation choices remain autonomous. The owner is interrupted for decisions outside delegated authority or after bounded recovery is exhausted: scope conflicts, architecture/security changes, paid-service/cost changes, destructive migrations, repeated failures, or configured release/deployment gates.
+
+```bash
+shipstate decision list
+shipstate decision resolve <DECISION-ID> <resolution> --note="..."
+shipstate resume
+```
+
+Choosing `replan` causes Codex to rebuild/extend the implementation path on resume. Approving a release/deployment gate authorizes only that specific gate.
+
+## Pause / resume
 
 ```bash
 shipstate pause --reason="owner review"
 shipstate resume
 ```
 
-## Owner decision gates
+Pause is safe-boundary oriented: an already-running bounded task may finish, then the controller stops before selecting the next task.
 
-Autonomous development is exception-driven. Routine implementation decisions remain with the AI team. The owner is interrupted only for undelegated decisions such as conflicting scope, architecture/security changes, paid-service/cost changes, destructive migrations, exhausted repair loops, or configured release/deployment approval gates.
+## Authority contract
 
-```bash
-shipstate decision list
-shipstate decision resolve owner-ab12cd34 approve --note="approved"
-shipstate resume
-```
-
-The web UI exposes the same decisions as buttons when the decision has predefined options.
-
-## `shipstate.project.json`
-
-The generated contract contains four important sections:
+The generated `shipstate.project.json` defaults to:
 
 ```json
 {
@@ -211,83 +238,45 @@ The generated contract contains four important sections:
 }
 ```
 
-To allow unattended production deployment, set `autonomy.deployment` to `automatic` and supply deterministic deploy + production smoke commands. Handover will refuse automatic deployment without both.
+For unattended production deployment set `autonomy.deployment` to `automatic` and provide deterministic deploy + production-smoke commands before accepting handover. Rollback commands are optional but recommended.
 
 ## Project lifecycle
 
 ```text
 PROJECT_SETUP
-    ↓
-HANDOVER_REVIEW
-    ↓
-READY_FOR_HANDOVER
-    ↓
-AUTONOMOUS_DEVELOPMENT
-    ↓
-INTERNAL_CERTIFICATION
-    ↓
-RELEASE_CANDIDATE
-    ↓
-DEPLOYMENT (when configured)
-    ↓
-DELIVERY_VALIDATION
-    ↓
-DELIVERY_READY
-    ↓
-DELIVERED
+ -> HANDOVER_REVIEW
+ -> READY_FOR_HANDOVER
+ -> AUTONOMOUS_DEVELOPMENT
+ -> INTERNAL_CERTIFICATION
+ -> RELEASE_CANDIDATE
+ -> DEPLOYMENT
+ -> DELIVERY_VALIDATION
+ -> DELIVERY_READY
+ -> DELIVERED
 ```
 
-Exception states include `OWNER_DECISION_REQUIRED`, `PAUSED`, `BLOCKED`, and `FAILED_CERTIFICATION`.
-
-Task-level lifecycle and Git worktree isolation remain unchanged underneath this project lifecycle.
+Exception states: `OWNER_DECISION_REQUIRED`, `PAUSED`, `BLOCKED`, `FAILED_CERTIFICATION`.
 
 ## Dashboard
 
-The owner-facing dashboard now exposes:
+- **Delivery** — project lifecycle, AI team, progress/current work, action-required status
+- **Handover** — mandatory docs/decisions, blockers, acceptance
+- **Decisions** — owner exception gates and AI recommendation
+- **Tasks** — Codex-maintained implementation DAG
+- **Runs** — developer attempts
+- **Evidence** — deterministic task/project/deployment evidence
+- **Context** — context/token metrics
+- **System** — Git, sandbox, journal, GitHub, Design Locks, registry
 
-- **Delivery** — project lifecycle, AI team, progress, current work and whether owner action is required
-- **Handover** — mandatory documents, decisions, blockers and handover acceptance
-- **Decisions** — exception gates requiring the owner
-- **Tasks** — AI-maintained implementation DAG
-- **Runs** — Claude/manual developer execution ledger
-- **Evidence** — deterministic verification, policy, diff and project-certification evidence
-- **Context** — bounded context/token metrics
-- **System** — Git, sandbox, journal, GitHub, Design Locks and project registry
+## Token efficiency
 
-Low-level Run/Verify/Accept controls remain available for debugging and manual override, but they are no longer the primary owner workflow.
+Initial preflight/planning can inspect the full approved project pack. Recurring task-manager and reviewer calls use compact project projections, relevant task relationships and bounded document slices. Claude receives a separate task-specific context containing the Codex brief, related code/tests, Design Locks, prior failures and review repair feedback. Role prompt-token estimates are recorded in the decision ledger.
 
-## Existing capabilities retained
+## Retained control-plane capabilities
 
-SHIPSTATE still includes:
+SHIPSTATE still provides automatic stack profiling, import/symbol/reverse-import/test/Git-aware context, detached Git worktrees, strongest-available local sandboxing, timeout/cancellation/process cleanup, typed evidence, stale-base protection, checksum event journal/replay, GitHub `gh` integration, project registry/workspaces, remote verification and optional CodeAtlas/GameForge contracts. There are zero runtime npm dependencies.
 
-- automatic repository profiling for Node/TS/JS, Python, Rust, Go, Java/Kotlin, Swift and Flutter/Dart
-- Context Engine 2 with import/symbol/reverse-import/test/Git awareness
-- detached Git worktree per developer run
-- strongest-available OS sandbox with explicit degradation reporting
-- timeout/cancellation/process-tree cleanup
-- typed evidence ledger
-- stale-base and dirty-main protections
-- checksum event journal, schema migrations, last-good state and replay
-- optional GitHub PR/check adapter via free `gh`
-- global project registry and multi-repository workspace manifests
-- remote verification and CodeAtlas/GameForge integration contracts
-- zero runtime npm dependencies
-
-## Install
-
-Requirements: Node.js 20+, Git, and—when using the default autonomous team—authenticated local Codex and Claude CLIs.
-
-```bash
-git clone https://github.com/KundanBhagatofficial/shipstate.git
-cd shipstate
-npm link
-npm run certify
-shipstate doctor
-```
-
-## Manual / advanced task mode
-
-The original task-level control plane remains available:
+## Manual/operator mode
 
 ```bash
 shipstate template TASK-001 "Implement feature" > specs/TASK-001.md
@@ -297,36 +286,16 @@ shipstate verify TASK-001
 shipstate accept TASK-001
 ```
 
-Legacy `shipstate autopilot` also remains available. New projects should normally use project handover + `shipstate start` instead.
+Legacy `shipstate autopilot` remains for task-level operation.
 
-## Real-agent certification
-
-CI does not contain your provider credentials. Test authenticated local adapters with:
+## Certification
 
 ```bash
+npm run certify
 shipstate certify-agent claude
 shipstate certify-agent codex
 ```
 
-## Release certification
+GitHub CI runs `npm run certify` on Ubuntu, macOS and Windows with Node 20 and 22. Provider credentials are intentionally not stored in CI.
 
-```bash
-npm run certify
-```
-
-CI runs the same gate on Ubuntu, macOS and Windows under Node 20 and 22.
-
-## Core invariants
-
-1. The owner controls canonical product truth and delegated authority.
-2. Project development cannot start before deterministic handover gates pass.
-3. Approved handover documents are protected from implementation agents.
-4. Codex may plan/manage/review but cannot grant deterministic verification.
-5. Claude may implement but cannot approve its own work.
-6. SHIPSTATE owns verification, acceptance, integration and project lifecycle state.
-7. Agent work never executes directly in the user's main working tree.
-8. Stale candidates cannot be silently accepted.
-9. Material undelegated decisions become explicit owner gates rather than AI guesses.
-10. No paid/cloud service is required by the SHIPSTATE kernel itself.
-
-See `docs/ARCHITECTURE.md`, `docs/TASK_CONTRACTS.md`, `docs/TESTING.md`, and `SECURITY.md` for implementation details.
+See `docs/ARCHITECTURE.md`, `docs/TASK_CONTRACTS.md`, `docs/TESTING.md`, `SECURITY.md`, and `CHANGELOG.md`.
