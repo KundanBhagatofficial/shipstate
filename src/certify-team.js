@@ -1,0 +1,24 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { run } from './utils.js';
+import { executableInfo,authStatus } from './agents.js';
+import { initStore,addTasks,readState,writeState } from './store.js';
+import { parseTaskMarkdown } from './spec.js';
+import { ensureProjectKit,REQUIRED_DOCUMENTS,REQUIRED_DECISIONS,projectDocumentPath,readProjectContract,writeProjectContract } from './project-kit.js';
+import { acceptHandover } from './handover.js';
+import { managerPreflight,managerPlan } from './agent-team.js';
+import { normalizeManagerPlan,runAutonomousDelivery } from './delivery.js';
+
+function git(root,args){const r=run('git',args,{cwd:root});if(r.status!==0)throw new Error(r.stderr||'git failed');}
+function projectDoc(doc){return `# ${doc.key} certification contract\n\nThis disposable project exists only to certify the SHIPSTATE autonomous AI-team pipeline. The complete approved product scope is to change the exported answer function in app.js from returning 1 to returning exactly 42 while preserving check.js. There is no additional feature scope, user interface, database, network service, paid dependency, migration, deployment target, or external integration. The repository contains plain JavaScript and the deterministic acceptance command is node check.js. Architecture is intentionally minimal: app.js is implementation code and check.js is immutable verification. Security scope forbids secrets and external services. Development may modify only app.js. Testing, delivery, and acceptance require answer() to return exactly 42 and node check.js to exit successfully. Any request to expand beyond that scope is prohibited.\n`;
+}
+
+export async function certifyTeam(){
+  for(const agent of ['codex','claude']){const info=executableInfo(agent);if(!info.available)return {passed:false,stage:'executable',agent,info};const auth=authStatus(agent);if(auth.supported&&auth.loggedIn===false)return {passed:false,stage:'host-auth',agent,auth};}
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'shipstate-team-'));git(root,['init','-b','main']);git(root,['config','user.name','SHIPSTATE Team Certification']);git(root,['config','user.email','shipstate@local']);fs.writeFileSync(path.join(root,'app.js'),'export const answer = () => 1;\n');fs.writeFileSync(path.join(root,'check.js'),'import {answer} from "./app.js"; if(answer()!==42) process.exit(1);\n');git(root,['add','.']);git(root,['commit','-m','fixture']);
+  initStore(root,'AI team certification');ensureProjectKit(root);for(const doc of REQUIRED_DOCUMENTS)fs.writeFileSync(projectDocumentPath(root,doc),projectDoc(doc));const contract=readProjectContract(root);for(const d of REQUIRED_DECISIONS)contract.decisions[d.key]={status:'approved',note:'approved for disposable team certification',allowNA:Boolean(d.allowNA),decidedAt:new Date().toISOString()};contract.autonomy.deployment='owner_gate';contract.autonomy.release='owner_gate';writeProjectContract(contract,root);git(root,['add','.gitignore','docs/shipstate','shipstate.project.json']);git(root,['commit','-m','approve disposable handover']);
+  const handover=acceptHandover(root);const preflight=await managerPreflight(root,'codex');if(preflight.status!=='READY')return {passed:false,stage:'manager-preflight',root,handover,preflight};const managerPlanResult=await managerPlan(root,'codex');if(managerPlanResult.status!=='PLAN')return {passed:false,stage:'manager-plan',root,managerPlanResult};let normalizedPlan;try{normalizedPlan=normalizeManagerPlan(managerPlanResult,readState(root));}catch(e){return {passed:false,stage:'manager-plan-validation',root,error:e.message,managerPlanResult};}if(!normalizedPlan.tasks.length)return {passed:false,stage:'manager-plan-empty',root,managerPlanResult};
+  const task=parseTaskMarkdown(`# Set answer to 42\nId: TEAM-CERT-001\nRisk: low\nNetwork: true\nTimeout: 600\n\n## Objective\nChange app.js so answer() returns exactly 42. Do not change check.js or project-control documents.\n\n## Acceptance Criteria\n- answer returns exactly 42\n- check.js remains unchanged\n\n## Verification\n- node check.js\n\n## Files\n- app.js\n- check.js\n\n## Allowed Paths\n- app.js\n\n## Evidence\n- command\n- diff\n`);addTasks([task],root);const s=readState(root);s.delivery={...(s.delivery||{}),preflightPassed:true,planBootstrapped:true};writeState(s,root);
+  const delivery=await runAutonomousDelivery({maxTasks:1,maxRepairs:2,roles:{manager:'codex',reviewer:'codex',developer:'claude'}},root);const final=readState(root),certTask=final.tasks.find(t=>t.id==='TEAM-CERT-001');const check=run(process.execPath,['check.js'],{cwd:root});const passed=certTask?.state==='ACCEPTED'&&check.status===0;return {passed,stage:passed?'complete':'delivery',root,handover,preflight,managerPlan:{summary:managerPlanResult.summary,taskCount:normalizedPlan.tasks.length},delivery,taskState:certTask?.state,checkExitCode:check.status,team:final.team};
+}
