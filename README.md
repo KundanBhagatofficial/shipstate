@@ -1,37 +1,45 @@
 # SHIPSTATE
 
-**Local-first execution control plane for AI coding agents.**
+**Local-first autonomous software delivery control plane for AI engineering teams.**
 
-SHIPSTATE sits between product intent, a Git repository, and implementation agents. It decides what is eligible, compiles bounded task context, executes work in isolation, verifies deterministic evidence, remembers failures, and integrates only explicitly accepted work.
+SHIPSTATE is designed for the point where the important project decisions are already made. The owner provides a complete project contract, hands the repository to the AI team, and monitors delivery instead of repeatedly writing implementation prompts.
 
-## 1.0 RC capabilities
+Default organization:
 
-- automatic repository profiling for Node/TS/JS, Python, Rust, Go, Java/Kotlin, Swift and Flutter/Dart
-- stack/framework/package-manager/test/lint/build detection
-- proposed product-doc → task-DAG planning with explicit approval
-- Design Locks and path-level architecture protection
-- import/symbol/reverse-import/test/Git-aware Context Engine 2
-- context/token analytics
-- detached Git worktree per run
-- strongest-available OS sandbox with explicit degradation reporting
-- timeout, cancellation, live logs and process-tree cleanup
-- typed Evidence Engine 2
-- candidate commits + explicit accept/reject
-- stale-base and dirty-main protection
-- parallel-safe DAG batch selection and autonomous execution loop
-- checksum event journal, versioned schema migration, last-good state and journal replay
-- optional GitHub PR/check adapter through the free `gh` CLI
-- global project registry and multi-repository workspace manifest
-- optional SSH remote diagnostics
-- CodeAtlas/GameForge integration contracts
-- productized local dashboard and JSON API
-- zero runtime npm dependencies
+- **Human** — Product Owner / Client
+- **Codex** — Project Manager + Senior Reviewer
+- **Claude** — Developer
+- **SHIPSTATE** — deterministic governor, verifier, evidence ledger and delivery controller
 
-## No paid dependency
+## Owner workflow
 
-SHIPSTATE requires only Node.js 20+ and Git. Manual mode exercises the complete governance lifecycle without Claude, Codex or any subscription. Claude/Codex/GitHub/SSH features are optional adapters around locally installed tools.
+```text
+Create repository + project documents
+        ↓
+shipstate init
+        ↓
+complete mandatory project pack + decisions
+        ↓
+commit project contract
+        ↓
+shipstate handover audit
+        ↓
+shipstate handover accept
+        ↓
+shipstate start   OR   Start AI Team in the web UI
+        ↓
+monitor Delivery / Decisions
+        ↓
+intervene only at explicit owner gates
+        ↓
+certified delivery / authorized deployment
+```
+
+The low-level task CLI remains available for debugging and manual operation, but it is no longer the primary owner workflow.
 
 ## Install
+
+Requirements: Node.js 20+, Git, and—when using the default autonomous team—authenticated local Codex and Claude CLIs.
 
 ```bash
 git clone https://github.com/KundanBhagatofficial/shipstate.git
@@ -41,149 +49,253 @@ npm run certify
 shipstate doctor
 ```
 
-## Start in any Git project
+## Initialize a project
+
+Run inside the Git repository to be built:
 
 ```bash
-cd /path/to/project
-shipstate init --name="My Project"
-shipstate profile
+shipstate init --name="My Product"
 ```
 
-Commit the `.gitignore` change produced by initialization before running agents.
+SHIPSTATE profiles the repository and creates `shipstate.project.json` plus a uniform project pack under `docs/shipstate/`.
 
-Create/import a task:
+### Mandatory project documents
+
+Every autonomous project uses the same twelve contracts:
+
+1. `PRODUCT.md` — problem, target users, goals, non-goals, scope
+2. `FEATURES.md` — approved feature inventory, priorities, dependencies, deferred scope
+3. `UX.md` — user flows, screens/surfaces, visual direction, accessibility
+4. `FRONTEND.md` — frontend architecture, design system, responsive/platform rules, constraints
+5. `ARCHITECTURE.md` — system boundary, components, interfaces, architecture constraints
+6. `DATA.md` — model, persistence, migrations, retention/privacy
+7. `SECURITY.md` — identity/access, secrets, threat boundaries, security gates
+8. `DEVELOPMENT.md` — repository structure, coding conventions, dependencies/integrations, development workflow
+9. `TESTING.md` — test layers, quality thresholds, certification evidence
+10. `DEPLOYMENT.md` — environments, target, release procedure, rollback
+11. `ACCEPTANCE.md` — delivery criteria, required evidence, accepted-limitations policy
+12. `DECISIONS.md` — material approved product/design/technical/cost/deployment decisions
+
+Templates deliberately contain `SHIPSTATE:TODO`. Handover cannot pass until every required document is substantive and every TODO marker is removed.
+
+### Mandatory owner decisions
+
+`shipstate.project.json` also requires explicit decisions for:
+
+- product scope
+- target users/use cases
+- feature scope/priorities
+- UX/design direction (or explicit N/A)
+- frontend implementation architecture (or explicit N/A)
+- system architecture
+- data/persistence strategy (or explicit N/A)
+- security model
+- development strategy/conventions
+- testing/certification strategy
+- deployment target/rollback strategy (or explicit N/A)
+- project acceptance criteria
+- decision ledger completeness
+- paid-service/dependency/cost policy
+- AI-team authority
+- deployment authority
+- release/handover authority
+
+Approve from the Handover screen, edit the JSON contract, or use:
 
 ```bash
-mkdir -p specs
-shipstate template TASK-001 "Implement session restore" > specs/TASK-001.md
-# edit acceptance criteria / policy
-shipstate import specs
-shipstate next
+shipstate handover decision product_scope approved --note="scope frozen"
+shipstate handover decision frontend_implementation not_applicable --note="headless service"
 ```
 
-Run without an AI subscription:
+Then commit the control files:
 
 ```bash
-shipstate run TASK-001 --agent=manual
-# edit the returned worktreePath
-shipstate verify TASK-001
-shipstate accept TASK-001
+git add docs/shipstate shipstate.project.json .gitignore
+git commit -m "docs: approve project handover contract"
 ```
 
-Run a configured agent:
+## Handover gate
 
 ```bash
-shipstate run TASK-001 --agent=claude
-# or
-shipstate run TASK-001 --agent=codex
-shipstate verify TASK-001
-shipstate accept TASK-001
+shipstate handover audit
 ```
 
-## Dashboard
+Development is blocked if any required document/decision is incomplete, automatic deployment lacks deploy/smoke commands, or the governed Git tree is dirty.
+
+When the audit reports `ready: true`:
+
+```bash
+shipstate handover accept
+```
+
+SHIPSTATE hashes the approved contract and protects `shipstate.project.json` plus `docs/shipstate/**`. Editing project truth afterwards invalidates the handover and requires audit + acceptance again.
+
+## Start autonomous delivery
+
+CLI:
+
+```bash
+shipstate start
+```
+
+Web UI:
 
 ```bash
 shipstate serve --open
 ```
 
-The UI exposes Now, Tasks, Runs, Evidence, Context/analytics and System views. It binds to `127.0.0.1` by default; mutations require a random per-server session token.
+Open **Delivery** and click **Start AI Team**.
 
-## Product intelligence
+The controller executes:
 
-`shipstate init` profiles the repository. `shipstate profile` refreshes it. Missing task verification/allowed-path policy can be derived from the profile, while explicit task policy takes precedence.
-
-## Product Owner / planning
-
-```bash
-shipstate plan PRODUCT.md TECH_SPEC.md
-shipstate plan approve <PLAN-ID>
+```text
+Codex handover preflight
+    ↓
+Codex roadmap / task DAG
+    ↓
+Codex bounded task brief
+    ↓
+Claude implementation in isolated Git worktree
+    ↓
+SHIPSTATE deterministic verification
+    ↓
+Codex senior review
+    ├─ APPROVE → SHIPSTATE integrates
+    ├─ REPAIR  → Claude repair
+    ├─ REPLAN  → Codex adjusts roadmap
+    └─ OWNER_DECISION_REQUIRED → owner gate
+    ↓
+next task
+    ↓
+Codex completion review
+    ↓
+SHIPSTATE project certification
+    ↓
+authorized deployment + production smoke + optional rollback
+    ↓
+DELIVERED
 ```
 
-Document-derived work stays `PROPOSED` until approved. SHIPSTATE never silently converts prose into authoritative project truth.
+Neither AI agent can directly mark a task VERIFIED/ACCEPTED or a project DELIVERED.
 
-## Design Locks
+## Owner decision gates
 
-```markdown
-- [security] LOCK-AUTH: paths=src/auth/** :: Authentication must remain server verified.
-- [immutable] LOCK-DATA: PostgreSQL remains authoritative persistence.
-```
+Normal implementation choices remain autonomous. The owner is interrupted for decisions outside delegated authority or after bounded recovery is exhausted: scope conflicts, architecture/security changes, paid-service/cost changes, destructive migrations, repeated failures, or configured release/deployment gates.
 
 ```bash
-shipstate locks import DESIGN_LOCKS.md
+shipstate decision list
+shipstate decision resolve <DECISION-ID> <resolution> --note="..."
+shipstate resume
 ```
 
-## Autopilot
+Choosing `replan` causes Codex to rebuild/extend the implementation path on resume. Approving a release/deployment gate authorizes only that specific gate.
+
+## Pause / resume
 
 ```bash
-shipstate autopilot --agent=claude --max=5 --attempts=2
+shipstate pause --reason="owner review"
+shipstate resume
 ```
 
-Low-risk tasks may be policy-auto-accepted if configured. Parallel mode selects non-overlapping path scopes:
+Pause is safe-boundary oriented: an already-running bounded task may finish, then the controller stops before selecting the next task.
 
-```bash
-shipstate autopilot --agent=codex --parallel=3 --no-auto-accept
+## Authority contract
+
+The generated `shipstate.project.json` defaults to:
+
+```json
+{
+  "roles": {
+    "productOwner": "human",
+    "manager": "codex",
+    "reviewer": "codex",
+    "developer": "claude",
+    "verifier": "shipstate"
+  },
+  "autonomy": {
+    "taskPlanning": "automatic",
+    "taskSelection": "automatic",
+    "implementation": "automatic",
+    "testing": "automatic",
+    "repairs": "automatic",
+    "integration": "automatic",
+    "architectureChanges": "owner_gate",
+    "securityModelChanges": "owner_gate",
+    "paidServices": "owner_gate",
+    "deployment": "owner_gate",
+    "release": "owner_gate"
+  },
+  "limits": {
+    "maxRepairCycles": 3,
+    "maxTasksPerSession": 100
+  },
+  "delivery": {
+    "buildCommands": [],
+    "deployCommands": [],
+    "smokeCommands": [],
+    "rollbackCommands": []
+  }
+}
 ```
 
-Parallel verified candidates are intentionally not silently integrated after another candidate moves `HEAD`; stale-base safety wins over throughput.
+For unattended production deployment set `autonomy.deployment` to `automatic` and provide deterministic deploy + production-smoke commands before accepting handover. Rollback commands are optional but recommended.
 
-## GitHub workflow
+## Project lifecycle
 
-With the free `gh` CLI installed/authenticated:
-
-```bash
-shipstate github status
-shipstate github pr-create --title="Verified SHIPSTATE candidate" --head=my-branch
-shipstate github pr-view 123
-shipstate github pr-checks 123
+```text
+PROJECT_SETUP
+ -> HANDOVER_REVIEW
+ -> READY_FOR_HANDOVER
+ -> AUTONOMOUS_DEVELOPMENT
+ -> INTERNAL_CERTIFICATION
+ -> RELEASE_CANDIDATE
+ -> DEPLOYMENT
+ -> DELIVERY_VALIDATION
+ -> DELIVERY_READY
+ -> DELIVERED
 ```
 
-## Project launcher / workspaces
+Exception states: `OWNER_DECISION_REQUIRED`, `PAUSED`, `BLOCKED`, `FAILED_CERTIFICATION`.
 
-Every initialized project is registered locally:
+## Dashboard
+
+- **Delivery** — project lifecycle, AI team, progress/current work, action-required status
+- **Handover** — mandatory docs/decisions, blockers, acceptance
+- **Decisions** — owner exception gates and AI recommendation
+- **Tasks** — Codex-maintained implementation DAG
+- **Runs** — developer attempts
+- **Evidence** — deterministic task/project/deployment evidence
+- **Context** — context/token metrics
+- **System** — Git, sandbox, journal, GitHub, Design Locks, registry
+
+## Token efficiency
+
+Initial preflight/planning can inspect the full approved project pack. Recurring task-manager and reviewer calls use compact project projections, relevant task relationships and bounded document slices. Claude receives a separate task-specific context containing the Codex brief, related code/tests, Design Locks, prior failures and review repair feedback. Role prompt-token estimates are recorded in the decision ledger.
+
+## Retained control-plane capabilities
+
+SHIPSTATE still provides automatic stack profiling, import/symbol/reverse-import/test/Git-aware context, detached Git worktrees, strongest-available local sandboxing, timeout/cancellation/process cleanup, typed evidence, stale-base protection, checksum event journal/replay, GitHub `gh` integration, project registry/workspaces, remote verification and optional CodeAtlas/GameForge contracts. There are zero runtime npm dependencies.
+
+## Manual/operator mode
 
 ```bash
-shipstate projects
+shipstate template TASK-001 "Implement feature" > specs/TASK-001.md
+shipstate import specs
+shipstate run TASK-001 --agent=claude
+shipstate verify TASK-001
+shipstate accept TASK-001
 ```
 
-A product spanning multiple repositories can create a workspace:
+Legacy `shipstate autopilot` remains for task-level operation.
+
+## Certification
 
 ```bash
-mkdir my-product-control && cd my-product-control
-shipstate workspace init --name="My Product"
-shipstate workspace add ../frontend --alias=web
-shipstate workspace add ../backend --alias=api
-shipstate workspace status
-```
-
-## Real-agent certification
-
-CI cannot safely contain your Claude/Codex credentials. Certify real installed agents locally:
-
-```bash
+npm run certify
 shipstate certify-agent claude
 shipstate certify-agent codex
 ```
 
-Each command creates a disposable repository and proves real adapter → context → isolated execution → deterministic verification → acceptance.
+GitHub CI runs `npm run certify` on Ubuntu, macOS and Windows with Node 20 and 22. Provider credentials are intentionally not stored in CI.
 
-## Release certification
-
-```bash
-npm run certify
-```
-
-GitHub CI runs the same gate on Ubuntu, macOS and Windows under Node 20 and 22.
-
-## Core invariants
-
-1. Agent output never directly creates `VERIFIED` or `ACCEPTED`.
-2. Real work never executes in the user's main working tree.
-3. Dependencies require integrated (`ACCEPTED`) prerequisites.
-4. Verification emits persisted typed evidence.
-5. Reduced sandbox capability is visible and never misrepresented.
-6. `.git`, `.shipstate` and `.env*` remain protected.
-7. Stale candidates cannot be silently accepted.
-8. State mutations are checksum-journaled.
-9. No paid/cloud service is required by the kernel.
-
-See `docs/ARCHITECTURE.md`, `docs/TASK_CONTRACTS.md`, `docs/TESTING.md` and `SECURITY.md`.
+See `docs/ARCHITECTURE.md`, `docs/TASK_CONTRACTS.md`, `docs/TESTING.md`, `SECURITY.md`, and `CHANGELOG.md`.
