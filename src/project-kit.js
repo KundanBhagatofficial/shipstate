@@ -66,7 +66,7 @@ function defaultDecision(d){return {status:'pending',note:'',allowNA:Boolean(d.a
 export function defaultProjectContract(){return {
   schemaVersion:PROJECT_CONTRACT_SCHEMA,
   project:{classes:[],platforms:[],publicSurfaces:[]},
-  qualityProfiles:{ui:'auto',accessibility:'required',responsive:'required',discoverability:'auto',performance:'required'},
+  qualityProfiles:{ui:'auto',accessibility:'auto',responsive:'auto',discoverability:'auto',performance:'auto'},
   providers:{structuralContext:'auto',semanticContext:'auto',uiIntelligence:'auto',discoverability:'auto'},
   roles:{productOwner:'human',manager:'codex',reviewer:'codex',developer:'claude',verifier:'shipstate'},
   autonomy:{taskPlanning:'automatic',taskSelection:'automatic',implementation:'automatic',testing:'automatic',repairs:'automatic',integration:'automatic',dependencyChanges:'within_approved_constraints',architectureChanges:'owner_gate',securityModelChanges:'owner_gate',destructiveMigrations:'owner_gate',paidServices:'owner_gate',deployment:'owner_gate',release:'owner_gate'},
