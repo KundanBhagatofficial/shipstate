@@ -1,2 +1,3 @@
-import test from 'node:test';import assert from 'node:assert/strict';import { parseLocks } from '../src/design-lock.js';
+import test from 'node:test';import assert from 'node:assert/strict';import { parseLocks,lockViolations } from '../src/design-lock.js';import { tempRepo } from './helpers.js';import { initStore,setLocks } from '../src/store.js';
 test('design locks support protected path syntax',()=>{const x=parseLocks('- [security] LOCK-A: paths=src/auth/** :: Auth must remain server verified');assert.equal(x[0].severity,'security');assert.deepEqual(x[0].paths,['src/auth/**']);});
+test('design lock globs actually protect matching descendants',()=>{const root=tempRepo('design-lock-enforcement');initStore(root);setLocks(parseLocks('- [security] LOCK-A: paths=src/auth/** :: Auth must remain server verified'),root);assert.equal(lockViolations({id:'T'},['src/auth/session.ts'],root).length,1);assert.equal(lockViolations({id:'T'},['src/profile.js'],root).length,0);});

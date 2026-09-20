@@ -5,6 +5,7 @@ import { assertTransition } from './core.js';
 import { detectProject } from './profile.js';
 
 export const CURRENT_SCHEMA=5;
+const LEGACY_CONTROL_PATHS=['shipstate.project.json','docs/shipstate/**'];
 
 export function paths(root=process.cwd()){
   const base=path.join(root,'.shipstate');
@@ -41,13 +42,13 @@ function migrate(s){
 }
 function mergeIntelligence(current={},patch={}){return {...current,...patch,providers:{...(current.providers||{}),...(patch.providers||{})},quality:{...(current.quality||{}),...(patch.quality||{})}};}
 
-export function initStore(root=process.cwd(),name){const p=paths(root);for(const d of [p.base,p.runs,p.contexts,p.worktrees,p.backups,p.cache,p.advisories])ensureDir(d);if(!fs.existsSync(p.state))writeJsonAtomic(p.state,emptyState(root,name));if(!fs.existsSync(p.events))fs.writeFileSync(p.events,'');ensureJournalFormat(root);appendEvent('PROJECT_INITIALIZED',{root,project:readJson(p.state)?.project,profile:readJson(p.state)?.profile,schemaVersion:CURRENT_SCHEMA},root);ensureGitignore(root);return readState(root);}
+export function initStore(root=process.cwd(),name){const p=paths(root);for(const d of [p.base,p.runs,p.contexts,p.worktrees,p.backups,p.cache,p.advisories])ensureDir(d);const created=!fs.existsSync(p.state);if(created)writeJsonAtomic(p.state,emptyState(root,name));if(!fs.existsSync(p.events))fs.writeFileSync(p.events,'');ensureJournalFormat(root);if(created)appendEvent('PROJECT_INITIALIZED',{root,project:readJson(p.state)?.project,profile:readJson(p.state)?.profile,schemaVersion:CURRENT_SCHEMA},root);ensureGitignore(root);return readState(root);}
 function ensureGitignore(root){const f=path.join(root,'.gitignore');let t=fs.existsSync(f)?fs.readFileSync(f,'utf8'):'';if(!t.split(/\r?\n/).includes('.shipstate/')){if(t&&!t.endsWith('\n'))t+='\n';fs.writeFileSync(f,t+'.shipstate/\n');}}
 export function readState(root=process.cwd()){ensureJournalFormat(root);const p=paths(root);let raw=readJson(p.state);if(!raw&&fs.existsSync(p.prev)){raw=readJson(p.prev);if(raw)writeJsonAtomic(p.state,raw);}if(!raw)throw new Error('SHIPSTATE state missing or invalid; no last-good snapshot available');const s=migrate(raw);if(s.schemaVersion!==raw.schemaVersion)writeState(s,root);return s;}
 export function writeState(s,root=process.cwd()){s.schemaVersion=CURRENT_SCHEMA;const p=paths(root);if(fs.existsSync(p.state)){try{fs.copyFileSync(p.state,p.prev);}catch{}}writeJsonAtomic(p.state,s);}
 function lastEventHash(root){try{const lines=fs.readFileSync(paths(root).events,'utf8').trim().split(/\n/).filter(Boolean);if(!lines.length)return 'GENESIS';return JSON.parse(lines.at(-1)).hash||'GENESIS';}catch{return 'GENESIS';}}
 export function appendEvent(type,payload,root=process.cwd()){ensureJournalFormat(root);const prevHash=lastEventHash(root),base={id:id('evt'),type,at:now(),payload,prevHash},event={...base,hash:sha256(JSON.stringify(base))};ensureDir(paths(root).base);fs.appendFileSync(paths(root).events,JSON.stringify(event)+'\n');return event;}
-export function verifyJournal(root=process.cwd()){if(!fs.existsSync(paths(root).events))return {valid:true,count:0};let prev='GENESIS',count=0;for(const line of fs.readFileSync(paths(root).events,'utf8').split(/\n/).filter(Boolean)){const e=JSON.parse(line),{hash,...base}=e;if(e.prevHash!==prev||sha256(JSON.stringify(base))!==hash)return {valid:false,count,error:`broken event chain at ${e.id}`};prev=hash;count++;}return {valid:true,count,lastHash:prev};}
+export function verifyJournal(root=process.cwd()){if(!fs.existsSync(paths(root).events))return {valid:true,count:0};let prev='GENESIS',count=0,lineNo=0;for(const line of fs.readFileSync(paths(root).events,'utf8').split(/\n/).filter(Boolean)){lineNo++;let e;try{e=JSON.parse(line);}catch(err){return {valid:false,count,error:`malformed event JSON at line ${lineNo}: ${err.message}`};}const {hash,...base}=e;if(e.prevHash!==prev||sha256(JSON.stringify(base))!==hash)return {valid:false,count,error:`broken event chain at ${e.id||`line ${lineNo}`}`};prev=hash;count++;}return {valid:true,count,lastHash:prev};}
 export function backupState(root=process.cwd()){const p=paths(root);ensureDir(p.backups);const out=path.join(p.backups,`state-${Date.now()}.json`);fs.copyFileSync(p.state,out);return out;}
 export function refreshProfile(root=process.cwd()){const s=readState(root);s.profile=detectProject(root);appendEvent('PROFILE_REFRESHED',{profile:s.profile},root);writeState(s,root);return s.profile;}
 export function addTasks(tasks,root=process.cwd()){const s=readState(root),ids=new Set(s.tasks.map(t=>t.id));for(const raw of tasks){const t={...raw};if(ids.has(t.id))throw new Error(`Duplicate task: ${t.id}`);ids.add(t.id);if(!(t.verification||[]).length)t.verification=[s.profile?.commands?.test,s.profile?.commands?.typecheck,s.profile?.commands?.lint].filter(Boolean);if(!(t.allowedPaths||[]).length)t.allowedPaths=[...(s.profile?.sourceDirs||[]).map(x=>`${x}/**`),...(s.profile?.testDirs||[]).filter(Boolean).map(x=>`${x}/**`)];s.tasks.push(t);appendEvent('TASK_IMPORTED',{task:t},root);}writeState(s,root);return s;}
@@ -63,30 +64,38 @@ export function setLocks(locks,root=process.cwd()){const s=readState(root);s.loc
 export function addPlan(plan,root=process.cwd()){const s=readState(root);s.plans.push(plan);appendEvent('PLAN_CREATED',{plan},root);writeState(s,root);return plan;}
 export function rebuildFromSnapshot(root=process.cwd()){const j=verifyJournal(root);if(!j.valid)throw new Error(j.error);return {ok:true,journal:j,state:readState(root)};}
 
+function parseJournalLines(root){const out=[];let lineNo=0;for(const line of fs.readFileSync(paths(root).events,'utf8').split(/\n/).filter(Boolean)){lineNo++;try{out.push(JSON.parse(line));}catch(e){throw new Error(`Journal contains malformed JSON at line ${lineNo}: ${e.message}`);}}return out;}
+function replayTaskPatch(state,q){if(!q?.taskId||!q?.patch)return;const t=state.tasks.find(x=>x.id===q.taskId);if(t)Object.assign(t,q.patch);}
 export function replayStateFromJournal(root=process.cwd()){
-  ensureJournalFormat(root);const p=paths(root),lines=fs.readFileSync(p.events,'utf8').split(/\n/).filter(Boolean).map(JSON.parse);let state=null;
+  ensureJournalFormat(root);const p=paths(root),lines=parseJournalLines(root);let state=null;
   for(const e of lines){
     const q=e.payload||{};
-    if(e.type==='PROJECT_INITIALIZED'&&q.project)state={schemaVersion:CURRENT_SCHEMA,project:q.project,profile:q.profile||{},tasks:[],runs:[],evidence:[],decisions:[],metrics:{contexts:[],agentRuns:[],projectTruth:[],providers:[],tokenEconomy:[]},locks:[],plans:[],remotes:[],...autonomousDefaults()};
+    if(e.type==='PROJECT_INITIALIZED'&&q.project){if(!state)state={schemaVersion:CURRENT_SCHEMA,project:q.project,profile:q.profile||{},tasks:[],runs:[],evidence:[],decisions:[],metrics:{contexts:[],agentRuns:[],projectTruth:[],providers:[],tokenEconomy:[]},locks:[],plans:[],remotes:[],...autonomousDefaults()};continue;}
     if(!state)continue;
     if(e.type==='TASK_IMPORTED'&&q.task&&!state.tasks.some(t=>t.id===q.task.id))state.tasks.push(q.task);
     else if(e.type==='TASK_TRANSITION'){const t=state.tasks.find(t=>t.id===q.taskId);if(t){t.state=q.to;Object.assign(t,q.meta||{});}}
+    else if(e.type==='TASK_RECOVERED'){const t=state.tasks.find(t=>t.id===q.taskId);if(t){t.state=q.to;Object.assign(t,q.meta||{});}}
     else if(e.type==='RUN_RECORDED'&&q.run){const i=state.runs.findIndex(r=>r.id===q.run.id);if(i>=0)state.runs[i]=q.run;else state.runs.push(q.run);}
     else if(e.type==='EVIDENCE_RECORDED'&&q.evidence)state.evidence.push(q.evidence);
     else if(e.type==='DECISION_RECORDED')state.decisions.push(q);
     else if(e.type==='PROFILE_REFRESHED')state.profile=q.profile||state.profile;
     else if(e.type==='DESIGN_LOCKS_UPDATED'&&q.locks)state.locks=q.locks;
-    else if(e.type==='PLAN_CREATED'&&q.plan)state.plans.push(q.plan);
-    else if(e.type==='PLAN_APPROVED'){const pl=state.plans.find(x=>x.id===q.planId);if(pl)pl.status='APPROVED';}
+    else if(e.type==='PLAN_CREATED'&&q.plan&&!state.plans.some(x=>x.id===q.plan.id))state.plans.push(q.plan);
+    else if(e.type==='PLAN_APPROVED'){const pl=state.plans.find(x=>x.id===q.planId);if(pl){pl.status='APPROVED';pl.approvedAt=q.approvedAt||pl.approvedAt;for(const t of pl.tasks||[])if(!state.tasks.some(x=>x.id===t.id))state.tasks.push({...t,proposed:false});}}
     else if(e.type==='METRIC_RECORDED'){state.metrics[q.kind]||=[];state.metrics[q.kind].push(q.item);}
-    else if(e.type==='HANDOVER_INITIALIZED')state.handover={...(state.handover||{}),status:'HANDOVER_REVIEW'};
-    else if(e.type==='HANDOVER_ACCEPTED')state.handover={...(state.handover||{}),status:'READY_FOR_HANDOVER',contractHash:q.contractHash,roles:q.roles,autonomy:q.autonomy};
+    else if(e.type==='HANDOVER_INITIALIZED'){state.handover={...(state.handover||{}),status:'HANDOVER_REVIEW'};state.delivery={...(state.delivery||{}),state:'PROJECT_SETUP'};}
+    else if(e.type==='HANDOVER_ACCEPTED'){
+      const accepted=q.handover||{status:'READY_FOR_HANDOVER',contractHash:q.contractHash,roles:q.roles,autonomy:q.autonomy};state.handover={...(state.handover||{}),...accepted,status:'READY_FOR_HANDOVER'};state.team={...(state.team||{}),...(q.team||q.roles||{})};state.delivery={...(state.delivery||{}),...(q.delivery||{}),state:'READY_FOR_HANDOVER',authorizedGates:{...(q.delivery?.authorizedGates||{})}};state.project.protectedPaths=[...new Set([...(state.project.protectedPaths||[]),...(q.protectedPaths||LEGACY_CONTROL_PATHS)])];
+    }
     else if(e.type==='PROJECT_HANDED_OVER')state.handover={...(state.handover||{}),status:'HANDED_OVER'};
-    else if(e.type==='PROJECT_LIFECYCLE')state.delivery={...(state.delivery||{}),...(q.patch||{}),state:q.state};
-    else if(e.type==='OWNER_DECISION_OPENED'&&q.decision)state.ownerDecisions.push(q.decision);
-    else if(e.type==='OWNER_DECISION_RESOLVED'){const d=state.ownerDecisions.find(x=>x.id===q.decisionId);if(d){d.status='RESOLVED';d.resolution=q.resolution;d.note=q.note;}}
+    else if(e.type==='PROJECT_LIFECYCLE')state.delivery={...(state.delivery||{}),...(q.patch||{}),state:q.state,authorizedGates:{...(state.delivery?.authorizedGates||{}),...(q.patch?.authorizedGates||{})}};
+    else if(e.type==='OWNER_DECISION_OPENED'&&q.decision&&!state.ownerDecisions.some(x=>x.id===q.decision.id))state.ownerDecisions.push(q.decision);
+    else if(e.type==='OWNER_DECISION_RESOLVED'){
+      const d=state.ownerDecisions.find(x=>x.id===q.decisionId);if(d){d.status='RESOLVED';d.resolution=q.resolution;d.note=q.note;d.resolvedAt=e.at;}state.delivery={...(state.delivery||{}),authorizedGates:{...(state.delivery?.authorizedGates||{})}};if(q.gate&&q.resolution==='approve')state.delivery.authorizedGates[q.gate]=true;if(q.resolution==='replan')state.delivery.forceReplan=true;
+    }
     else if((q.kind==='intelligence'||['INTELLIGENCE_UPDATED','CONTEXT_INTELLIGENCE_USED','QUALITY_CERTIFIED'].includes(e.type))&&q.patch)state.intelligence=mergeIntelligence(state.intelligence,q.patch);
     else if(e.type==='REPAIR_EPISODE_RECORDED'&&q.episode){const i=state.repairEpisodes.findIndex(x=>x.id===q.episode.id);if(i>=0)state.repairEpisodes[i]=q.episode;else state.repairEpisodes.push(q.episode);}
+    else if(q.taskId&&q.patch)replayTaskPatch(state,q);
   }
-  if(!state)throw new Error('Journal does not contain replayable project initialization');writeState(state,root);appendEvent('STATE_REPLAYED',{eventCount:lines.length},root);return state;
+  if(!state)throw new Error('Journal does not contain replayable project initialization');writeState(migrate(state),root);appendEvent('STATE_REPLAYED',{eventCount:lines.length},root);return readState(root);
 }

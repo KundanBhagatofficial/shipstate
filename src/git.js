@@ -3,6 +3,9 @@ function git(root,args,{ok=[0]}={}){const r=run('git',args,{cwd:root});if(!ok.in
 export const isGitRepo=root=>run('git',['rev-parse','--is-inside-work-tree'],{cwd:root}).status===0;
 export const head=root=>git(root,['rev-parse','HEAD']);
 export const branch=root=>git(root,['rev-parse','--abbrev-ref','HEAD']);
+export const revParse=(root,expr)=>git(root,['rev-parse',expr]);
+export const treeHash=(root,ref='HEAD')=>revParse(root,`${ref}^{tree}`);
+export const parentOf=(root,ref='HEAD')=>revParse(root,`${ref}^`);
 export const isClean=root=>git(root,['status','--porcelain'])==='';
 export const statusPorcelain=root=>git(root,['status','--porcelain']);
 export function changedFiles(root){const a=git(root,['diff','--name-only']);const b=git(root,['diff','--cached','--name-only']);const c=git(root,['ls-files','--others','--exclude-standard']);return [...new Set([...a.split('\n'),...b.split('\n'),...c.split('\n')].filter(Boolean))];}
