@@ -72,7 +72,7 @@ export function replayStateFromJournal(root=process.cwd()){
     const q=e.payload||{};
     if(e.type==='PROJECT_INITIALIZED'&&q.project){if(!state)state={schemaVersion:CURRENT_SCHEMA,project:q.project,profile:q.profile||{},tasks:[],runs:[],evidence:[],decisions:[],metrics:{contexts:[],agentRuns:[],projectTruth:[],providers:[],tokenEconomy:[]},locks:[],plans:[],remotes:[],...autonomousDefaults()};continue;}
     if(!state)continue;
-    if(e.type==='TASK_IMPORTED'&&q.task&&!state.tasks.some(t=>t.id===q.task.id))state.tasks.push(q.task);
+    if(e.type==='TASK_IMPORTED'&&q.task){const i=state.tasks.findIndex(t=>t.id===q.task.id);if(i>=0)state.tasks[i]={...state.tasks[i],...q.task};else state.tasks.push(q.task);}
     else if(e.type==='TASK_TRANSITION'){const t=state.tasks.find(t=>t.id===q.taskId);if(t){t.state=q.to;Object.assign(t,q.meta||{});}}
     else if(e.type==='TASK_RECOVERED'){const t=state.tasks.find(t=>t.id===q.taskId);if(t){t.state=q.to;Object.assign(t,q.meta||{});}}
     else if(e.type==='RUN_RECORDED'&&q.run){const i=state.runs.findIndex(r=>r.id===q.run.id);if(i>=0)state.runs[i]=q.run;else state.runs.push(q.run);}
