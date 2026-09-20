@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.2.0-rc.1
+- deterministic compiled ProjectTruth with stable requirement/decision/quality fact IDs and canonical-document provenance
+- Project Contract v2 and state schema v5 with backward migration from prior autonomous-delivery state
+- Context Router 3 with hard token budgets, ProjectTruth selection, structural/semantic/UI provider routing, exact source selection and per-task context receipts
+- measurable token economy: actual context tokens, estimated naive context, tokens avoided, provider latency and selected provider history
+- generic read-only capability-provider kernel; optional providers cannot mutate SHIPSTATE state or override ProjectTruth/Design Locks
+- built-in SHIPSTATE-lite structural provider retained as the zero-dependency fallback
+- optional code-review-graph structural/impact/architecture provider with per-repository/per-commit graph isolation
+- adaptive provider selection using repository/task characteristics plus confidence-weighted measured ROI from token savings, latency and failure history
+- optional CodeAtlas, UI/UX Pro Max, GameForge and GEO/discoverability provider boundaries with fallback behavior
+- provider hardening: sanitized command environments, bounded output, timeouts, serializability checks and sequential fallback
+- systematic repair engine: failure classification, root-cause hypothesis, minimal repair contract, regression-test policy and persisted Repair Episodes
+- automatic manager replan after repair exhaustion before an owner decision gate is created
+- web/SaaS/iOS/Android/cross-platform quality profiles and pre-handover UI advisory
+- deterministic public-web discoverability certification for governed public surfaces
+- release lifecycle now requires deterministic project certification plus required SHIPSTATE quality certification before RELEASE_CANDIDATE
+- cross-repository task dependencies participate in eligibility instead of being display-only metadata
+- global project Hub over the local SHIPSTATE registry
+- remote developer execution over SSH/rsync with temporary remote workspaces, heartbeat, timeout/cancellation, log capture, artifact sync-back and local verification
+- owner dashboard Intelligence surface for ProjectTruth, adaptive providers, quality expectations, repair history and token efficiency
+- journal replay now preserves nested intelligence state across named intelligence events, including historical 1.2 event names
+- CI certification remains Ubuntu/macOS/Windows × Node 20/22 with syntax, unit, smoke and end-to-end gates
+
 ## 1.1.0-rc.1
 - project-level handover and autonomous delivery lifecycle
 - uniform mandatory project pack: product, features, UX, frontend, architecture, data, security, development, testing, deployment, acceptance and decision ledger
