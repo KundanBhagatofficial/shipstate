@@ -1,0 +1,2 @@
+import { readIntegration,callIntegration } from '../../integrations.js';
+export const gameForgeProvider={id:'gameforge',capabilities:['workflow-provider'],network:false,readOnly:true,priority:50,detect(root){const cfg=readIntegration('gameForge',root);return {available:Boolean(cfg?.command),configured:Boolean(cfg?.command)};},score(){return 50;},query(input,root){return callIntegration('gameForge',input.action||'workflow',input,root);}};
