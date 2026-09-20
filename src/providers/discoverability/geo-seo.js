@@ -1,0 +1,3 @@
+import { commandProviderConfig,invokeCommandProvider } from '../command-provider.js';
+const ALLOWED=new Set(['technical','schema','citability','crawlers']);
+export const geoSeoProvider={id:'geo-seo',capabilities:['discoverability-advisory'],network:true,readOnly:true,priority:30,detect(root){const cfg=commandProviderConfig('geo-seo',root);return {available:Boolean(cfg?.command),configured:Boolean(cfg?.command)};},score(root,ctx={}){return ctx.publicSurface?60:-100;},query(input={},root){const action=String(input.action||'technical');if(!ALLOWED.has(action))throw new Error(`geo-seo action must be one of: ${[...ALLOWED].join(', ')}`);return invokeCommandProvider('geo-seo',action,{...input,advisory:true},root);}};
