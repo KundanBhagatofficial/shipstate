@@ -154,7 +154,7 @@ Neither AI agent can directly mark a task VERIFIED/ACCEPTED or a project DELIVER
 
 ## ProjectTruth and Context Router 3
 
-SHIPSTATE 1.2 compiles the approved project pack into provenance-bearing ProjectTruth facts. Recurring manager, reviewer and developer runs select relevant facts instead of repeatedly transmitting the whole project specification.
+SHIPSTATE 1.2 compiles the approved project pack into provenance-bearing ProjectTruth facts. Fact IDs remain stable when unchanged statements are merely reordered within the same source section. Recurring manager, reviewer and developer runs select relevant facts instead of repeatedly transmitting the whole project specification.
 
 ```bash
 shipstate truth compile
@@ -174,7 +174,7 @@ For governed autonomous tasks, Context Router 3 combines:
 - prior review/repair evidence
 - exact source/test context
 
-Every package is hard-budgeted and emits a receipt with selected facts/files, provider choice and latency, context hash, actual tokens, estimated naive tokens and estimated tokens avoided.
+Every package is hard-budgeted and emits a receipt with selected facts/files, provider choice and per-provider latency, context hash, actual tokens, estimated naive tokens and estimated tokens avoided.
 
 Manual/operator projects without a handover contract keep the lightweight legacy context path.
 
@@ -256,16 +256,18 @@ Pause is safe-boundary oriented: a currently running bounded task may finish, th
 
 ## Cross-repository projects and Hub
 
+The dependency command is ordered **upstream prerequisite first, downstream dependent second**.
+
 ```bash
 shipstate workspace init --name=my-workspace
 shipstate workspace add ../api --alias=api
 shipstate workspace add ../web --alias=web
-shipstate workspace depend web:WEB-031 api:API-017
+shipstate workspace depend api:API-017 web:WEB-031
 shipstate workspace status
 shipstate hub
 ```
 
-Cross-repository dependencies participate in eligibility: an upstream task must be ACCEPTED before its dependent task is eligible.
+Cross-repository dependencies participate in eligibility: the upstream task must be ACCEPTED before the downstream task is eligible.
 
 `shipstate hub` summarizes lifecycle, completion, active work and owner decisions across registered local SHIPSTATE projects.
 
@@ -310,7 +312,7 @@ Exception states: `OWNER_DECISION_REQUIRED`, `PAUSED`, `BLOCKED`, `FAILED_CERTIF
 - **Intelligence** — ProjectTruth, provider detection/ROI, quality profile and Repair Episodes
 - **System** — Git, sandbox, journal, GitHub, Design Locks and project registry
 
-The HTTP server binds to loopback by default and requires a random mutation token for state-changing API calls.
+The HTTP server binds to loopback by default, requires a random mutation token for state-changing API calls, and serves dashboard files only from the canonical web root.
 
 ## Manual/operator mode
 

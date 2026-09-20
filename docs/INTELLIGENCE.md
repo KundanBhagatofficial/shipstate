@@ -16,7 +16,7 @@ Providers are read-only from the control plane's perspective. A provider may sug
 
 ## ProjectTruth
 
-After handover, SHIPSTATE compiles the canonical project pack into stable facts with source provenance. Recurring manager, reviewer and developer contexts select only the facts relevant to the current task instead of resending all project documents.
+After handover, SHIPSTATE compiles the canonical project pack into stable facts with source provenance. Fact IDs are derived from the source section and normalized statement, so simple reordering does not invalidate references. Recurring manager, reviewer and developer contexts select only the facts relevant to the current task instead of resending all project documents.
 
 Commands:
 
@@ -50,7 +50,7 @@ Manual/operator projects that do not use a handover contract retain the lightwei
 
 - estimated context tokens avoided
 - actual context tokens
-- provider latency
+- per-provider latency
 - provider failure rate
 
 The adjustment starts conservatively and gains weight as measurements accumulate. Explicit provider configuration remains authoritative; `off` disables a capability. A configured provider that is unavailable fails clearly instead of silently pretending it ran.
@@ -105,13 +105,13 @@ Project finalization requires normal deterministic project certification and req
 
 ## Distributed execution
 
-Cross-repository dependencies can be added to a SHIPSTATE workspace; upstream tasks must be ACCEPTED before dependent work becomes eligible.
+Cross-repository dependencies can be added to a SHIPSTATE workspace; the first task reference is the upstream prerequisite and the second is the downstream dependent. Upstream tasks must be ACCEPTED before dependent work becomes eligible.
 
 ```bash
 shipstate workspace init --name=my-workspace
 shipstate workspace add ../api --alias=api
 shipstate workspace add ../web --alias=web
-shipstate workspace depend web:WEB-031 api:API-017
+shipstate workspace depend api:API-017 web:WEB-031
 shipstate workspace status
 shipstate hub
 ```
