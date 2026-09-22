@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';import path from 'node:path';
 import { tempRepo } from './helpers.js';
-import { initStore } from '../src/store.js';
+import { initStore,recordEvidence } from '../src/store.js';
 import { ensureProjectKit,readProjectContract,writeProjectContract } from '../src/project-kit.js';
 import { deriveQualityProfile,adviseUi,certifyQuality } from '../src/quality.js';
 import { webDiscoverabilityProvider } from '../src/providers/discoverability/web-native.js';
@@ -20,5 +20,9 @@ test('native discoverability checks deterministic HTML metadata',async()=>{const
 test('required discoverability surface without a certifiable URL fails closed',async()=>{const root=tempRepo('discoverability');initStore(root);ensureProjectKit(root);const c=readProjectContract(root);c.qualityProfiles.security='off';c.project.classes=['saas'];c.project.platforms=['web'];c.project.publicSurfaces=[{id:'marketing',kind:'web',discoverability:'required'}];for(const d of ['accessibility','responsive','browser-e2e','performance','ui-consistency'])c.qualityCertification.commands[d]=['node --version'];writeProjectContract(c,root);const q=await certifyQuality(root);assert.equal(q.passed,false);assert.match(q.reason,/no URL/i);});
 
 test('quality certification fails closed when a required dimension has no evidence',async()=>{const root=tempRepo('quality-missing');initStore(root);ensureProjectKit(root);const c=readProjectContract(root);c.project.classes=['service'];writeProjectContract(c,root);const q=await certifyQuality(root);assert.equal(q.passed,false);assert.deepEqual(q.missingDimensions,['security']);assert.match(q.reason,/qualityCertification\.commands\.security/);});
+
+test('security quality gate reuses only deterministically classified project certification evidence',async()=>{const root=tempRepo('quality-security-reuse');initStore(root);ensureProjectKit(root);const c=readProjectContract(root);c.project.classes=['service'];writeProjectContract(c,root);recordEvidence([{id:'security-cert',taskId:'PROJECT',type:'project-certification',source:'npm audit --audit-level=high',status:'passed',createdAt:new Date().toISOString()}],root);const q=await certifyQuality(root);assert.equal(q.passed,true);assert.deepEqual(q.missingDimensions,[]);assert.equal(q.reusedEvidence.length,1);assert.equal(q.reusedEvidence[0].dimension,'security');assert.equal(q.reusedEvidence[0].evidenceId,'security-cert');});
+
+test('ordinary project tests cannot satisfy the required security quality gate',async()=>{const root=tempRepo('quality-security-strict');initStore(root);ensureProjectKit(root);const c=readProjectContract(root);c.project.classes=['service'];writeProjectContract(c,root);recordEvidence([{id:'general-cert',taskId:'PROJECT',type:'project-certification',source:'npm test',status:'passed',createdAt:new Date().toISOString()}],root);const q=await certifyQuality(root);assert.equal(q.passed,false);assert.deepEqual(q.missingDimensions,['security']);assert.equal(q.reusedEvidence.length,0);});
 
 test('configured deterministic quality commands produce release evidence',async()=>{const root=tempRepo('quality-commands');initStore(root);ensureProjectKit(root);let c=readProjectContract(root);c.project.classes=['saas'];c.project.platforms=['web'];writeProjectContract(c,root);const p=deriveQualityProfile(root);c=readProjectContract(root);for(const d of p.required)c.qualityCertification.commands[d]=['node --version'];writeProjectContract(c,root);const q=await certifyQuality(root);assert.equal(q.passed,true,JSON.stringify(q.missingDimensions));assert.equal(q.evidence.filter(e=>e.type==='quality').length,p.required.length);assert.ok(q.evidence.every(e=>e.status==='passed'));});
