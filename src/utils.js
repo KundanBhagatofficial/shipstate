@@ -9,8 +9,8 @@ export const sha256 = (value) => createHash('sha256').update(value).digest('hex'
 export const ensureDir = (p) => fs.mkdirSync(p,{recursive:true});
 export const readJson = (p, fallback=null) => { try { return JSON.parse(fs.readFileSync(p,'utf8')); } catch { return fallback; } };
 export const writeJsonAtomic = (p, value) => { ensureDir(path.dirname(p)); const tmp=`${p}.${process.pid}.${Date.now()}.tmp`; fs.writeFileSync(tmp,JSON.stringify(value,null,2)+'\n'); fs.renameSync(tmp,p); };
-export const run = (cmd,args=[],opts={}) => spawnSync(cmd,args,{encoding:'utf8',shell:false,...opts});
-export const runShell = (command,cwd,env=process.env,timeout=0) => spawnSync(command,{cwd,env,encoding:'utf8',shell:true,timeout:timeout||undefined});
+export const run = (cmd,args=[],opts={}) => spawnSync(cmd,args,{encoding:'utf8',shell:false,timeout:2*60*1000,maxBuffer:16*1024*1024,...opts});
+export const runShell = (command,cwd,env=process.env,timeout=0) => spawnSync(command,{cwd,env,encoding:'utf8',shell:true,timeout:timeout||undefined,maxBuffer:16*1024*1024});
 export const rel = (root,p) => path.relative(root,p).split(path.sep).join('/');
 export const normalizePath = (p='') => p.replaceAll('\\','/').replace(/^\.\//,'');
 export const globToRegExp = (glob) => {

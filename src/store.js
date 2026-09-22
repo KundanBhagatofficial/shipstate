@@ -89,7 +89,7 @@ export function replayStateFromJournal(root=process.cwd()){
     else if(e.type==='PLAN_CREATED'&&q.plan&&!state.plans.some(x=>x.id===q.plan.id))state.plans.push(q.plan);
     else if(e.type==='PLAN_APPROVED'){const pl=state.plans.find(x=>x.id===q.planId);if(pl){pl.status='APPROVED';pl.approvedAt=q.approvedAt||pl.approvedAt;for(const t of pl.tasks||[])if(!state.tasks.some(x=>x.id===t.id))state.tasks.push({...t,proposed:false});}}
     else if(e.type==='METRIC_RECORDED'){state.metrics[q.kind]||=[];state.metrics[q.kind].push(q.item);}
-    else if(e.type==='HANDOVER_INITIALIZED'){state.handover={...(state.handover||{}),status:'HANDOVER_REVIEW'};state.delivery={...(state.delivery||{}),state:'PROJECT_SETUP'};}
+    else if(e.type==='HANDOVER_INITIALIZED'){state.handover={...(state.handover||{}),...(q.handover||{}),status:'HANDOVER_REVIEW'};state.delivery={...(state.delivery||{}),...(q.delivery||{}),state:'PROJECT_SETUP',authorizedGates:{...(state.delivery?.authorizedGates||{}),...(q.delivery?.authorizedGates||{})}};}
     else if(e.type==='HANDOVER_ACCEPTED'){
       const accepted=q.handover||{status:'READY_FOR_HANDOVER',contractHash:q.contractHash,roles:q.roles,autonomy:q.autonomy};state.handover={...(state.handover||{}),...accepted,status:'READY_FOR_HANDOVER'};state.team={...(state.team||{}),...(q.team||q.roles||{})};state.delivery={...(state.delivery||{}),...(q.delivery||{}),state:'READY_FOR_HANDOVER',authorizedGates:{...(q.delivery?.authorizedGates||{})}};state.project.protectedPaths=[...new Set([...(state.project.protectedPaths||[]),...(q.protectedPaths||LEGACY_CONTROL_PATHS)])];
     }
