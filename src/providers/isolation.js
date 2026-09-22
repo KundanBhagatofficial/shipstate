@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ensureDir,run } from '../utils.js';
+import { ensureDir,run,sha256 } from '../utils.js';
 
 const COPY_IGNORES=new Set(['.git','.shipstate','node_modules','vendor','dist','build','coverage','.next','Pods','DerivedData']);
 const MAX_CACHE_FILES=20000,MAX_CACHE_BYTES=256*1024*1024;
@@ -24,4 +24,6 @@ function makeProjection(root,providerId){
 }
 function cacheInventory(root){let files=0,bytes=0;const walk=dir=>{if(!fs.existsSync(dir))return;for(const ent of fs.readdirSync(dir,{withFileTypes:true})){const abs=path.join(dir,ent.name);if(ent.isSymbolicLink())throw new Error('Provider cache contains a symbolic link');if(ent.isDirectory())walk(abs);else if(ent.isFile()){files++;bytes+=fs.statSync(abs).size;if(files>MAX_CACHE_FILES||bytes>MAX_CACHE_BYTES)throw new Error('Provider cache exceeds SHIPSTATE persistence limits');}else throw new Error('Provider cache contains an unsupported filesystem entry');}};walk(root);return {files,bytes};}
 function persistCache(sourceCache,projectionCache){if(!fs.existsSync(projectionCache))return {files:0,bytes:0};const inventory=cacheInventory(projectionCache);fs.rmSync(sourceCache,{recursive:true,force:true});ensureDir(path.dirname(sourceCache));fs.cpSync(projectionCache,sourceCache,{recursive:true,dereference:false});return inventory;}
-export async function withReadOnlyProviderRoot(root,providerId,fn){const source=path.resolve(root),p=makeProjection(source,providerId);let result,error;try{result=await fn(p.projection,{providerRoot:p.projection,dataDir:p.projectionCache,isolation:'disposable-projection',projectionMode:p.mode,readOnly:true});}catch(e){error=e;}try{persistCache(p.sourceCache,p.projectionCache);}finally{cleanup(p.parent);}if(error)throw error;return result;}
+function projectionSnapshot(root,cacheRoot){const rows=[];const walk=dir=>{if(!fs.existsSync(dir))return;for(const ent of fs.readdirSync(dir,{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name))){const abs=path.join(dir,ent.name),rel=path.relative(root,abs).split(path.sep).join('/');if(rel==='.git'||rel.startsWith('.git/'))continue;if(inside(cacheRoot,abs))continue;const st=fs.lstatSync(abs);if(st.isSymbolicLink())rows.push([rel,'symlink',fs.readlinkSync(abs)]);else if(st.isDirectory()){rows.push([rel,'dir']);walk(abs);}else if(st.isFile())rows.push([rel,'file',st.mode&0o777,st.size,sha256(fs.readFileSync(abs))]);else rows.push([rel,'other']);}};walk(root);return sha256(JSON.stringify(rows));}
+function assertProjectionUnchanged(root,cacheRoot,before){const after=projectionSnapshot(root,cacheRoot);if(after!==before)throw new Error('Provider violated read-only contract by mutating the repository projection outside its cache');}
+export async function withReadOnlyProviderRoot(root,providerId,fn){const source=path.resolve(root),p=makeProjection(source,providerId),before=projectionSnapshot(p.projection,p.projectionCache);let result,error;try{result=await fn(p.projection,{providerRoot:p.projection,dataDir:p.projectionCache,isolation:'disposable-projection',projectionMode:p.mode,readOnly:true});assertProjectionUnchanged(p.projection,p.projectionCache,before);}catch(e){error=e;}try{if(!error)persistCache(p.sourceCache,p.projectionCache);}finally{cleanup(p.parent);}if(error)throw error;return result;}
