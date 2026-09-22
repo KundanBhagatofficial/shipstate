@@ -16,8 +16,8 @@ function sourceIsCleanGit(root){const inside=run('git',['rev-parse','--is-inside
 function makeProjection(root,providerId){
   const parent=fs.mkdtempSync(path.join(os.tmpdir(),'shipstate-provider-')),projection=path.join(parent,'repo');let mode='copy';
   if(sourceIsCleanGit(root)){
-    const cloned=run('git',['clone','--shared','--quiet',root,projection],{timeout:2*60*1000,maxBuffer:8*1024*1024});
-    if(cloned.status===0)mode='git-clone';
+    const cloned=run('git',['clone','--no-hardlinks','--quiet',root,projection],{timeout:2*60*1000,maxBuffer:8*1024*1024});
+    if(cloned.status===0){run('git',['remote','remove','origin'],{cwd:projection,timeout:5000,maxBuffer:1024*1024});mode='git-clone';}
   }
   if(!fs.existsSync(projection)){ensureDir(projection);copyTree(root,projection);}
   copyControlFile(path.join(root,'.shipstate','integrations'),path.join(projection,'.shipstate','integrations'));
