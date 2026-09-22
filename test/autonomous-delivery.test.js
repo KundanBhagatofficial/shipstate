@@ -5,6 +5,7 @@ import { initStore,readState } from '../src/store.js';
 import { extractAgentJson } from '../src/agent-team.js';
 import { normalizeManagerPlan } from '../src/delivery.js';
 import { addOwnerDecision,resolveOwnerDecision } from '../src/handover.js';
+import { classifyProviderAvailability } from '../src/runner.js';
 
 test('AI team JSON parser accepts fenced and plain structured decisions',()=>{assert.deepEqual(extractAgentJson('```json\n{"status":"READY"}\n```'),{status:'READY'});assert.deepEqual(extractAgentJson('prefix\n{"verdict":"APPROVE","summary":"ok"}\nsuffix'),{verdict:'APPROVE',summary:'ok'});assert.throws(()=>extractAgentJson('not-json'),/JSON/);});
 
@@ -13,3 +14,6 @@ test('manager plan normalizes IDs and rejects unsafe graph output',()=>{const st
 test('owner release gate authorizes only explicit approval',()=>{const root=tempRepo('owner-gate');initStore(root);const d=addOwnerDecision({gate:'release',title:'Release?',question:'Approve?',options:['approve','pause']},root);assert.equal(readState(root).delivery.state,'OWNER_DECISION_REQUIRED');resolveOwnerDecision(d.id,'approve','approved',root);const state=readState(root);assert.equal(state.delivery.authorizedGates.release,true);assert.equal(state.ownerDecisions[0].status,'RESOLVED');assert.equal(state.delivery.state,'PAUSED');});
 
 test('owner replan resolution requests manager replan without granting gates',()=>{const root=tempRepo('owner-replan');initStore(root);const d=addOwnerDecision({title:'Repair exhausted',question:'Next?',options:['retry','replan','pause'],taskId:'TASK-1'},root);resolveOwnerDecision(d.id,'replan','re-evaluate implementation path',root);const state=readState(root);assert.equal(state.delivery.forceReplan,true);assert.deepEqual(state.delivery.authorizedGates,{});assert.equal(state.delivery.state,'PAUSED');});
+
+
+test('developer provider availability classifier is narrow and requires no changed files',()=>{assert.equal(classifyProviderAvailability({stdout:"You've hit your session limit · resets 12am",changedFiles:[]}), 'provider_quota');assert.equal(classifyProviderAvailability({stderr:'Please run /login to continue',changedFiles:[]}), 'provider_auth');assert.equal(classifyProviderAvailability({stdout:'quota exceeded',changedFiles:['app.js']}),null);assert.equal(classifyProviderAvailability({stderr:'application auth assertion failed',changedFiles:[]}),null);});

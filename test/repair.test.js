@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { regressionTestPolicy,failureKind,startRepairEpisode,repairFeedback } from '../src/repair.js';
+import { regressionTestPolicy,failureKind,startRepairEpisode,repairFeedback,diagnoseRepair } from '../src/repair.js';
 import { tempRepo } from './helpers.js';
 import { initStore,readState } from '../src/store.js';
 
@@ -9,3 +9,6 @@ test('systematic repair classifies behavioral failures and persists evidence bef
 });
 
 test('pure visual polish does not blindly require a new regression test',()=>{assert.equal(regressionTestPolicy({title:'Adjust CSS spacing',objective:'visual polish only'},{summary:'padding alignment'}).required,false);});
+
+
+test('provider quota exhaustion pauses for owner retry without invoking AI diagnosis',async()=>{const root=tempRepo('repair-provider');initStore(root);const task={id:'TASK-Q',title:'Bounded implementation',objective:'Change one file',acceptanceCriteria:['works']};const failure={type:'execution',providerAvailability:'provider_quota',summary:'Developer attempt failed',stdout:"You've hit your session limit · resets 12am (Asia/Kolkata)",evidence:['exitCode=1','changedFiles=']};assert.equal(failureKind(failure),'provider-availability');const {diagnosis}=await diagnoseRepair(task,failure,1,root,'definitely-not-a-real-agent');assert.equal(diagnosis.status,'OWNER_DECISION_REQUIRED');assert.deepEqual(diagnosis.decisions[0].options,['retry','pause']);assert.match(diagnosis.rootCause,/temporarily unavailable/);});
