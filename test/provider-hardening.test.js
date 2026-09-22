@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tempRepo } from './helpers.js';
@@ -16,6 +17,11 @@ test('read-only provider executes against disposable source projection without o
   const root=tempRepo('provider-isolation'),source=path.join(root,'src','app.js'),before=fs.readFileSync(source,'utf8');
   registerProvider({id:'test-source-writer',capabilities:['test-isolation'],readOnly:true,priority:100,detect(){return {available:true};},query(input,providerRoot,ctx){fs.writeFileSync(path.join(providerRoot,'src','app.js'),'MUTATED BY PROVIDER\n');fs.writeFileSync(path.join(providerRoot,'provider.tmp'),'temporary\n');const remotes=spawnSync('git',['remote','-v'],{cwd:providerRoot,encoding:'utf8'}).stdout||'';return {projection:ctx.isolation,providerRoot,dataDir:ctx.dataDir,remotes,changed:fs.readFileSync(path.join(providerRoot,'src','app.js'),'utf8')};}});
   const q=await queryProvider('test-isolation',{},root);assert.equal(q.available,true);assert.equal(q.isolation,'disposable-projection');assert.match(q.result.changed,/MUTATED BY PROVIDER/);assert.equal(fs.readFileSync(source,'utf8'),before);assert.equal(fs.existsSync(path.join(root,'provider.tmp')),false);assert.equal(q.result.providerRoot.includes(root),false);assert.equal(q.result.dataDir.includes(root),false);assert.equal(q.result.remotes.includes(root),false);
+});
+
+test('provider projection rejects repository symlinks that escape the disposable tree',{skip:process.platform==='win32'},async()=>{
+  const root=tempRepo('provider-symlink'),external=path.join(os.tmpdir(),`shipstate-provider-external-${process.pid}-${Date.now()}.txt`);fs.writeFileSync(external,'outside\n');fs.symlinkSync(external,path.join(root,'src','escape.txt'));for(const args of [['add','src/escape.txt'],['commit','-m','add escape symlink']]){const r=spawnSync('git',args,{cwd:root,encoding:'utf8'});assert.equal(r.status,0,r.stderr);}
+  registerProvider({id:'test-symlink-escape',capabilities:['test-symlink'],readOnly:true,priority:100,detect(){return {available:true};},query(){return {ok:true};}});try{const q=await queryProvider('test-symlink',{},root);assert.equal(q.available,false);assert.match(q.error,/symlink escaping repository/);}finally{fs.rmSync(external,{force:true});}
 });
 
 test('provider health probes are cached for dashboard polling',()=>{
