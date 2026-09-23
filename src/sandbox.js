@@ -1,10 +1,13 @@
 import os from 'node:os';import { run } from './utils.js';
-export function detectSandbox(){
- if(process.platform==='linux'){const b=run('bwrap',['--version']);if(b.status===0)return {kind:'bubblewrap',level:'os',available:true,version:(b.stdout||'').trim()};}
- if(process.platform==='darwin'){const s=run('sandbox-exec',['-h']);if(s.status===0||s.status===64)return {kind:'sandbox-exec',level:'os',available:true,version:'system'};}
+const DETECTION_TTL_MS=30000;let DETECTION_CACHE=null;
+function detectSandboxNow(){
+ if(process.platform==='linux'){const b=run('bwrap',['--version'],{timeout:3000,maxBuffer:1024*1024});if(b.status===0)return {kind:'bubblewrap',level:'os',available:true,version:(b.stdout||'').trim()};}
+ if(process.platform==='darwin'){const s=run('sandbox-exec',['-h'],{timeout:3000,maxBuffer:1024*1024});if(s.status===0||s.status===64)return {kind:'sandbox-exec',level:'os',available:true,version:'system'};}
  if(process.platform==='win32')return {kind:'windows-process',level:'worktree',available:true,warning:'OS filesystem sandbox not enabled; worktree/path policy only'};
  return {kind:'worktree',level:'worktree',available:true,warning:'No supported OS-native sandbox detected'};
 }
+export function clearSandboxDetectionCache(){DETECTION_CACHE=null;}
+export function detectSandbox({refresh=false}={}){const t=Date.now();if(!refresh&&DETECTION_CACHE&&t-DETECTION_CACHE.at<DETECTION_TTL_MS)return {...DETECTION_CACHE.value};const value=detectSandboxNow();DETECTION_CACHE={at:t,value};return {...value};}
 function seatbeltPath(value){return String(value||'').replaceAll('\\','/').replaceAll('"','\\"');}
 function macChild(home,...parts){return [String(home||'').replaceAll('\\','/').replace(/\/+$/,''),...parts].join('/');}
 export function macProfile(worktree,network,{keychainAccess=false,home=os.homedir(),tmpdir=process.env.TMPDIR||os.tmpdir()}={}){
@@ -15,7 +18,7 @@ export function sandboxCommand(spec,{worktree,network=false,memoryMb=0,cpuSecond
  const d=detectSandbox();
  if(d.kind==='bubblewrap'){
    const args=['--die-with-parent','--new-session','--ro-bind','/','/','--bind',worktree,worktree,'--chdir',worktree,'--proc','/proc','--dev','/dev'];
-   if(!network)args.push('--unshare-net'); args.push('--',spec.cmd,...spec.args); const pr=run('prlimit',['--version']); if(pr.status===0&&(memoryMb||cpuSeconds)){const limits=[];if(memoryMb)limits.push(`--as=${Math.floor(memoryMb*1024*1024)}`);if(cpuSeconds)limits.push(`--cpu=${Math.floor(cpuSeconds)}`);return {cmd:'prlimit',args:[...limits,'--','bwrap',...args],descriptor:{...d,network,memoryMb,cpuSeconds,resourceLimits:true,keychainAccess:false}};} return {cmd:'bwrap',args,descriptor:{...d,network,memoryMb,cpuSeconds,resourceLimits:false,keychainAccess:false}};
+   if(!network)args.push('--unshare-net'); args.push('--',spec.cmd,...spec.args); const pr=run('prlimit',['--version'],{timeout:3000,maxBuffer:1024*1024}); if(pr.status===0&&(memoryMb||cpuSeconds)){const limits=[];if(memoryMb)limits.push(`--as=${Math.floor(memoryMb*1024*1024)}`);if(cpuSeconds)limits.push(`--cpu=${Math.floor(cpuSeconds)}`);return {cmd:'prlimit',args:[...limits,'--','bwrap',...args],descriptor:{...d,network,memoryMb,cpuSeconds,resourceLimits:true,keychainAccess:false}};} return {cmd:'bwrap',args,descriptor:{...d,network,memoryMb,cpuSeconds,resourceLimits:false,keychainAccess:false}};
  }
  if(d.kind==='sandbox-exec') return {cmd:'sandbox-exec',args:['-p',macProfile(worktree,network,{keychainAccess}),spec.cmd,...spec.args],descriptor:{...d,network,memoryMb,cpuSeconds,resourceLimits:false,keychainAccess}};
  return {...spec,descriptor:{...d,network,memoryMb,cpuSeconds,resourceLimits:false,keychainAccess:false}};

@@ -82,12 +82,16 @@ failure
   -> Codex root-cause hypothesis
   -> minimal repair contract
   -> regression-test expectation when applicable
-  -> Claude repair
+  -> preferred developer repair (Claude; Codex fallback on provider availability)
   -> deterministic verification
   -> Codex review
 ```
 
 After bounded repair exhaustion, Codex attempts an in-scope replan before SHIPSTATE opens an owner decision gate.
+
+### Developer failover / failback
+
+Developer routing is independent from intelligence-provider fallback. The default route is Claude first with Codex as the bounded implementation fallback. Quota/session exhaustion, authentication unavailability, or an unavailable executable can trigger immediate same-task failover only when the failed provider produced no source changes. The failover state is journaled and replayable. During the configured cooldown the fallback is preferred; after `developerFailbackProbeMs` (default five minutes), the next task probes Claude first and successful execution clears the failover. A provider failure after source changes remains a normal implementation failure and enters the evidence/repair path.
 
 ## Quality profiles
 
