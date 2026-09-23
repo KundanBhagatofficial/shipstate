@@ -8,7 +8,8 @@ Default organization:
 
 - **Human** — Product Owner / Client
 - **Codex** — Project Manager + Senior Reviewer
-- **Claude** — Developer
+- **Claude** — preferred Developer
+- **Codex** — automatic Developer fallback when Claude is quota/auth/provider unavailable
 - **SHIPSTATE** — deterministic governor, verifier, evidence ledger and delivery controller
 
 Current release candidate: **1.2.0-rc.1**.
@@ -41,7 +42,7 @@ The task-level CLI remains available for debugging and manual operation, but it 
 
 ## Install
 
-Requirements: Node.js 20+, Git, and—when using the default autonomous team—authenticated local Codex and Claude CLIs.
+Requirements: Node.js 20+, Git, and—when using the default autonomous team—authenticated local Claude and Codex CLIs. Claude is preferred for implementation; Codex is the default bounded fallback.
 
 ```bash
 git clone https://github.com/KundanBhagatofficial/shipstate.git
@@ -130,12 +131,14 @@ Codex bounded task brief
 Context Router 3 compiles task-specific ProjectTruth + code intelligence
     ↓
 Claude implementation in isolated Git worktree
+    ├─ quota/auth/provider unavailable before source changes → Codex continues the same task
+    └─ after cooldown, next task probes Claude and fails back automatically
     ↓
 SHIPSTATE deterministic verification
     ↓
 Codex senior review
     ├─ APPROVE → SHIPSTATE integrates
-    ├─ REPAIR  → systematic diagnosis + Claude repair
+    ├─ REPAIR  → systematic diagnosis + preferred/fallback developer repair
     ├─ REPLAN  → Codex adjusts roadmap
     └─ OWNER_DECISION_REQUIRED → owner gate
     ↓
@@ -213,12 +216,16 @@ failure
   -> Codex root-cause hypothesis
   -> minimal repair contract
   -> regression-test expectation where applicable
-  -> Claude repair
+  -> preferred developer repair (Claude; Codex fallback on provider availability)
   -> SHIPSTATE verification
   -> Codex review
 ```
 
 Repair Episodes persist in project state/history. After the configured repair budget is exhausted, Codex attempts an in-scope replan before SHIPSTATE asks the owner for a decision.
+
+### Developer provider failover
+
+By default, `roles.developer` is `claude` and `roles.developerFallbacks` is `["codex"]`. A strong provider-availability failure (quota/session exhaustion, authentication unavailable, or executable/provider unavailable) with **no source changes** immediately continues the same bounded task on the next fallback without consuming a repair cycle. SHIPSTATE persists the active failover in delivery state, retries the preferred developer after `limits.developerFailbackProbeMs` (default 300000 ms), and clears failover after a successful preferred-provider run. If source files were already changed, normal verification/repair rules apply instead of silently switching models.
 
 ## Quality and discoverability
 
