@@ -3,7 +3,7 @@ import { run } from './utils.js';
 export const ADAPTERS={
   manual:{kind:'manual'},
   'dry-run':{kind:'command',command:()=>({cmd:process.execPath,args:['-e','console.log("SHIPSTATE dry-run")']})},
-  claude:{kind:'command',macKeychain:true,command:prompt=>({cmd:'claude',args:['-p',prompt]})},
+  claude:{kind:'command',macKeychain:true,command:prompt=>({cmd:'claude',args:['-p','--permission-mode','acceptEdits','--permission-prompts','none',prompt]})},
   codex:{kind:'command',command:prompt=>({cmd:'codex',args:['exec',prompt]})}
 };
 
