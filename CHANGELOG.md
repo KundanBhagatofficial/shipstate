@@ -1,6 +1,19 @@
 # Changelog
 
-## 1.2.0-rc.1
+## 1.2.0
+- stable promotion of the 1.2 release candidate after post-merge adversarial validation and zero-issue repair loop
+- replay/state hardening: idempotent initialization, replayable task/delivery/handover/owner-gate mutations, fail-closed malformed/tampered journals and protected last-good snapshots
+- real Design Lock glob enforcement, crash-safe acceptance/recovery, and safe path-disjoint parallel candidate integration with post-integration verification/rollback
+- quality certification now fails closed for required dimensions, with corrected platform inference and deterministic security-evidence reuse
+- hard final context-token budgets for both routed and legacy context compilers
+- provider hardening with sanitized bounded subprocesses, disposable read-only projections, source-mutation detection, cache-only persistence and dashboard health-probe caching
+- bounded runtime output and termination escalation plus deterministic SSH/rsync control timeouts
+- real finishProject end-to-end coverage for release/deployment owner gates, production smoke and rollback success/failure
+- Claude remains the preferred developer; Codex is the bounded automatic fallback for quota/auth/provider/writeability outages before source changes
+- provider failover is journaled, does not consume a repair cycle, and automatically probes/fails back to Claude after the configured cooldown
+- Claude developer execution is non-interactive inside the isolated worktree; Codex manager/reviewer stays read-only and Codex developer fallback receives workspace-write only
+- certification commands return non-zero when structured certification fails; retry execution clears stale failure metadata
+- live authenticated certification proved both the preferred Claude path and real Claude session-limit -> Codex same-task fallback path
 - deterministic compiled ProjectTruth with stable requirement/decision/quality fact IDs and canonical-document provenance
 - Project Contract v2 and state schema v5 with backward migration from prior autonomous-delivery state
 - Context Router 3 with hard token budgets, ProjectTruth selection, structural/semantic/UI provider routing, exact source selection and per-task context receipts

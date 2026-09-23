@@ -17,9 +17,9 @@ test('dashboard exposes 1.2 intelligence and token-economy surfaces',()=>{
  assert.match(app,/Repair episodes/);
 });
 
-test('release metadata identifies 1.2 release candidate',()=>{
+test('release metadata identifies 1.2 stable release',()=>{
  const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
  const changelog=fs.readFileSync(path.join(root,'CHANGELOG.md'),'utf8');
- assert.equal(pkg.version,'1.2.0-rc.1');
- assert.match(changelog,/## 1\.2\.0-rc\.1/);
+ assert.equal(pkg.version,'1.2.0');
+ assert.match(changelog,/## 1\.2\.0/);
 });
