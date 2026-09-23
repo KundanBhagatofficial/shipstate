@@ -1,2 +1,4 @@
 import test from 'node:test';import assert from 'node:assert/strict';import { evaluatePaths } from '../src/policy.js';
 test('protected files and out of scope files are blocked',()=>{const task={allowedPaths:['src/**'],protectedPaths:[]};const r=evaluatePaths(['src/a.js','.env.local','docs/x.md'],task,{});assert.equal(r.passed,false);assert.equal(r.violations.length,2);});
+
+test('trailing-slash scopes cover directory descendants for allow and protection',()=>{const task={allowedPaths:['src/core/'],protectedPaths:['src/core/private/']};const allowed=evaluatePaths(['src/core/game.js','src/core/nested/state.js'],task,{});assert.equal(allowed.passed,true);const blocked=evaluatePaths(['src/core/private/secret.js'],task,{});assert.equal(blocked.passed,false);assert.equal(blocked.violations[0].reason,'protected');});
