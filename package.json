@@ -1,6 +1,6 @@
 {
   "name": "shipstate",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Local-first autonomous software delivery control plane for AI engineering teams",
   "type": "module",
   "bin": {"shipstate": "./src/cli.js"},

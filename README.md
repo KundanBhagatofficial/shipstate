@@ -12,7 +12,7 @@ Default organization:
 - **Codex** — automatic Developer fallback when Claude is quota/auth/provider unavailable
 - **SHIPSTATE** — deterministic governor, verifier, evidence ledger and delivery controller
 
-Current stable release: **1.2.0**.
+Current stable release: **1.2.1**.
 
 ## Owner workflow
 
