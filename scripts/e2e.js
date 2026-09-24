@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { initStore,addTasks,readState,verifyJournal,recordDecision } from '../src/store.js';
+import { initStore,addTasks,readState,verifyJournal,recordDecision,mutateDelivery } from '../src/store.js';
 import { ensureProjectKit,REQUIRED_DOCUMENTS,REQUIRED_DECISIONS,readProjectContract,writeProjectContract,projectDocumentPath } from '../src/project-kit.js';
 import { initializeHandover,handoverAudit,acceptHandover,addOwnerDecision,resolveOwnerDecision } from '../src/handover.js';
 import { normalizeManagerPlan } from '../src/delivery.js';
@@ -69,7 +69,8 @@ try{
   const verification=verifyTask('E2E-001',root);assert.equal(verification.passed,true);assert.ok(verification.candidateCommit);recordDecision({id:'decision-e2e-review',type:'code-review',actor:'codex-e2e',taskId:'E2E-001',at:new Date().toISOString(),verdict:'APPROVE'},root);const accepted=acceptTask('E2E-001',root,'codex-e2e');assert.equal(accepted.accepted,true);assert.match(fs.readFileSync(path.join(root,'app.js'),'utf8'),/42/);
 
   console.log('6/9 real finishProject automatic certification + deployment');
-  const finished=await finishProject(root);assert.equal(finished.complete,true);assert.equal(finished.delivered,true);assert.equal(finished.certification.passed,true);assert.equal(finished.quality.passed,true);assert.equal(finished.deployment.passed,true);assert.equal(finished.smoke.passed,true);assert.equal(readState(root).delivery.state,'DELIVERED');assert.equal(fs.existsSync(path.join(root,'deployed.flag')),true);
+  mutateDelivery({lastError:'stale prior failure',pauseReason:'stale pause',developerFailover:{preferred:'claude',active:'codex',reason:'provider_quota'}},'E2E_STALE_DELIVERY',root);
+  const finished=await finishProject(root);assert.equal(finished.complete,true);assert.equal(finished.delivered,true);assert.equal(finished.certification.passed,true);assert.equal(finished.quality.passed,true);assert.equal(finished.deployment.passed,true);assert.equal(finished.smoke.passed,true);const deliveredState=readState(root).delivery;assert.equal(deliveredState.state,'DELIVERED');assert.equal(deliveredState.lastError,null);assert.equal(deliveredState.pauseReason,null);assert.equal(deliveredState.developerFailover,null);assert.equal(fs.existsSync(path.join(root,'deployed.flag')),true);
 
   console.log('7/9 finalization owner gates + smoke rollback matrix');
   const gated=makeFinalizationFixture('gated',{release:'owner_gate',deployment:'owner_gate'});extraRoots.push(gated);let result=await finishProject(gated);assert.equal(result.awaiting,'release');let state=readState(gated),decision=state.ownerDecisions.find(d=>d.status==='OPEN'&&d.gate==='release');assert.ok(decision);resolveOwnerDecision(decision.id,'approve','E2E release approval',gated);result=await finishProject(gated);assert.equal(result.awaiting,'deployment');state=readState(gated);decision=state.ownerDecisions.find(d=>d.status==='OPEN'&&d.gate==='deployment');assert.ok(decision);resolveOwnerDecision(decision.id,'approve','E2E deployment approval',gated);result=await finishProject(gated);assert.equal(result.delivered,true);assert.equal(readState(gated).delivery.state,'DELIVERED');

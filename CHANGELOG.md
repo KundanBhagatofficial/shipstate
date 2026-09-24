@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.1
+- benchmark-driven orchestration repairs validated against the Space Invader mobile benchmark
+- developer context is materialized inside isolated worktrees and protected against tampering
+- zero-change provider/context denials are classified as failures instead of successful developer runs
+- rejected tasks are excluded from autonomous selection while explicit operator retry remains supported
+- manager verification/evidence contracts are normalized to supported executable forms
+- replacement-task dependency lineage is rewired so downstream work does not remain blocked on rejected predecessors
+- trailing-slash allowed/protected paths now use directory-prefix semantics
+- final certification and E2E cleanup tolerate already-removed governed worktrees
+- benchmark candidate completed all eight tasks, project certification, required quality gates, automatic deployment, production smoke and DELIVERED transition
+
 ## 1.2.0
 - stable promotion of the 1.2 release candidate after post-merge adversarial validation and zero-issue repair loop
 - replay/state hardening: idempotent initialization, replayable task/delivery/handover/owner-gate mutations, fail-closed malformed/tampered journals and protected last-good snapshots
